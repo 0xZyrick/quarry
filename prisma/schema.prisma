@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Experience C: Narrative Progression Models ─────────────────────────────
+// Core philosophy: every surface must surface Intent, Decisions, Progress, Participation.
+// Raw, contextless streams are rejected. Projects are the narrative umbrella.
+
+model User {
+  id          String         @id
+  handle      String?        @unique
+  levelTrack  String         @default("rising_craftsman")
+  projects    Project[]
+  contributions Contribution[]
+  follows       ProjectFollow[]
+  wallet      Wallet?
+  createdAt   DateTime       @default(now())
+}
+
+model Project {
+  id               String         @id @default(uuid())
+  creatorId        String
+  creator          User           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title            String
+  intentStatement  String         // Goal: what am I trying to accomplish?
+  currentState     String?        // Lightweight: what am I working on / figuring out?
+  nextStep         String?        // Lightweight: what am I trying next?
+  status           ProjectStatus  @default(IN_PROGRESS)
+  journeyNodes     JourneyNode[]
+  workSessions     WorkSession[]
+  followers        ProjectFollow[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  @@index([creatorId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model JourneyNode {
+  id            String         @id @default(uuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  position      Int
+  dayLabel      String
+  phaseTitle    String
+  summaryText   String
+  prevSnapshotUrl String?
+  nextSnapshotUrl String?
+  evolutionDelta  String?
+  mediaDrops    MediaDrop[]
+  discussions   Contribution[]
+  createdAt     DateTime       @default(now())
+  @@index([projectId, position])
+}
+
+model MediaDrop {
+  id            String       @id @default(uuid())
+  journeyNodeId String
+  journeyNode   JourneyNode  @relation(fields: [journeyNodeId], references: [id], onDelete: Cascade)
+  type          DropType
+  videoUrl      String
+  durationSecs  Int
+  decisionMetric String?
+  tag           String?
+  isLiveExtract Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  @@index([journeyNodeId])
+}
+
+enum DropType {
+  STREAM_VOD_7DAY
+  PERMANENT_TEASE
+}
+
+model Contribution {
+  id             String      @id @default(uuid())
+  journeyNodeId  String
+  journeyNode    JourneyNode @relation(fields: [journeyNodeId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           ActionType
+  messageText    String
+  isPinnedByHost Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  @@index([journeyNodeId])
+  @@index([userId])
+}
+
+enum ActionType {
+  SUGGESTION
+  CRITIQUE
+  ENCOURAGEMENT
+}
+
+
+
+// 05 Work Session — where work is happening now (live, recorded, or progress-linked)
+model WorkSession {
+  id            String          @id @default(uuid())
+  creatorId     String
+  projectId     String?         // optional link to Project Journey
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  title         String
+  // Lightweight context (optional, reusable)
+  goal          String?
+  currentState  String?
+  nextStep      String?
+
+  visibility    SessionVisibility @default(PUBLIC)
+  mode          SessionMode       @default(LIVE)
+  roomId        String?           // maps to existing Commons/War room when live
+  isActive      Boolean           @default(true)
+
+  createdAt     DateTime          @default(now())
+  endedAt       DateTime?
+
+  @@index([creatorId])
+  @@index([projectId])
+  @@index([visibility, isActive])
+}
+
+enum SessionVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum SessionMode {
+  LIVE
+  RECORDED
+  PROGRESS_UPDATE
+}
+
+model ProjectFollow {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastSeenAt  DateTime @default(now()) // Return loop: "what changed since you left"
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+// ─── Paystack / Wallet Ledger (secondary, quiet tracking) ───────────────────
+
+model Wallet {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paystackSubaccountCode String? @unique
+  dedicatedBankNumber    String? @unique
+  dedicatedBankName      String?
+  internalCreditBalance Int    @default(0)
+  currency              String @default("NGN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TransactionLedger {
+  id          String   @id @default(uuid())
+  senderId    String?
+  receiverId  String?
+  amountKobo  Int
+  type        String
+  status      String
+  reference   String   @unique
+  roomId      String?
+  milestoneId String?
+  createdAt   DateTime @default(now())
+  @@index([roomId, milestoneId])
+  @@index([senderId])
+  @@index([receiverId])
+}
