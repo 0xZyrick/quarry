@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useGuild } from "@/lib/store";
+import { useOnboarding } from "../onboarding/OnboardingProvider";
 import JourneyRail from "./JourneyRail";
 import ConnectionCockpit from "./ConnectionCockpit";
 import CreatorJourney from "./CreatorJourney";
@@ -21,7 +22,8 @@ export default function ProjectWorkspace({ projectId, onClose }: { projectId: st
   const [followBusy, setFollowBusy] = useState(false);
   const [showCreator, setShowCreator] = useState(false);
   const profile = useGuild((s) => s.profile);
-  const userId = (profile as any)?.id ?? profile?.handle ?? "";
+  const { signedIn, requireAuth, data: onb } = useOnboarding();
+  const userId = signedIn ? ((profile as any)?.id ?? onb.uid ?? profile?.handle ?? "") : "";
 
   useEffect(() => {
     let dead = false;
@@ -63,6 +65,10 @@ export default function ProjectWorkspace({ projectId, onClose }: { projectId: st
   }, [userId, projectId]);
 
   const toggleFollow = async () => {
+    if (!signedIn) {
+      requireAuth("follow this project and get updates");
+      return;
+    }
     if (followBusy || !userId || !project) return;
     setFollowBusy(true);
     try {
@@ -170,8 +176,7 @@ export default function ProjectWorkspace({ projectId, onClose }: { projectId: st
           </button>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
-          {userId && (
-            <button
+          <button
               onClick={toggleFollow}
               disabled={followBusy}
               className={`btn glass rounded-full px-2.5 py-1 font-mono text-[11px] ${
@@ -180,7 +185,6 @@ export default function ProjectWorkspace({ projectId, onClose }: { projectId: st
             >
               {following ? "Following" : "Follow"}
             </button>
-          )}
           <button
             onClick={() => setCockpitOpen((v) => !v)}
             className="btn glass rounded-full px-2.5 py-1 font-mono text-[11px] text-neutral-300 hover:text-white"

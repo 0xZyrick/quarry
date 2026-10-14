@@ -132,30 +132,32 @@ export default function SpatialShell(){
 
   return <div className="fixed inset-0 overflow-hidden select-none" onScroll={e=>{e.currentTarget.scrollLeft=0;e.currentTarget.scrollTop=0}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
     {/* Top bar: room tools left · identity cluster right — one row, balanced CSS */}
-    <header className="absolute top-0 inset-x-0 z-30 flex items-center gap-2 px-3 py-2 pointer-events-none">
-      <div className="flex items-center gap-1.5 pointer-events-auto min-w-0">
-        {layer===2&&<>
-          <button type="button" aria-label="Back to feed" onClick={()=>go(0)} className="glass btn rounded-full px-2.5 py-1 font-mono text-[11px] text-neutral-200 hover:bg-live hover:text-black shrink-0">← Feed</button>
-          <div className="glass rounded-full flex text-[11px] font-mono p-0.5 shrink-0">
-            {(["stream","commons","war"] as const).filter(r=>views.includes(r)).map(r=>(
-              <button key={r} type="button" onClick={()=>setRoom(r)} aria-pressed={room===r}
-                className={`btn px-2.5 py-1 rounded-full whitespace-nowrap ${room===r?(r==="war"?"bg-risk":"bg-live")+" text-black":"text-neutral-400 hover:text-white"}`}>
-                {r==="war"?(me.role==="guest"?"Balcony":"Project"):r==="stream"?"Workspace":"Commons"}
-              </button>
-            ))}
-          </div>
-        </>}
-        {layer===1&&(
-          <button type="button" aria-label="Back to feed" onClick={()=>go(0)} className="glass btn rounded-full px-3 py-1 font-mono text-[11px] text-neutral-200 hover:bg-live hover:text-black">← Feed</button>
-        )}
-      </div>
-      <div className="flex-1 min-w-0"/>
-      {/* Single glass cluster — counts + wallet + profile only */}
-      <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-line bg-[rgba(22,25,32,.85)] backdrop-blur-md pl-2.5 pr-1.5 py-1 max-w-[min(100%,20rem)] min-w-0">
-        <GlobalCounts/>
-        <span className="text-neutral-600 select-none" aria-hidden>|</span>
-        <Wallet bare/>
-        <RoleChip/>
+    <header className="absolute top-0 inset-x-0 z-30 pointer-events-none px-4 sm:px-5 pt-3 pb-2">
+      <div className="flex items-center gap-2 w-full max-w-[100%] mx-auto min-h-[2.25rem]">
+        <div className="flex items-center gap-1.5 pointer-events-auto min-w-0 shrink">
+          {layer===2&&<>
+            <button type="button" aria-label="Back to feed" onClick={()=>go(0)} className="glass btn rounded-full px-2.5 py-1 font-mono text-[11px] text-neutral-200 hover:bg-live hover:text-black shrink-0">← Feed</button>
+            <div className="glass rounded-full flex text-[11px] font-mono p-0.5 shrink-0">
+              {(["stream","commons","war"] as const).filter(r=>views.includes(r)).map(r=>(
+                <button key={r} type="button" onClick={()=>setRoom(r)} aria-pressed={room===r}
+                  className={`btn px-2.5 py-1 rounded-full whitespace-nowrap ${room===r?(r==="war"?"bg-risk":"bg-live")+" text-black":"text-neutral-400 hover:text-white"}`}>
+                  {r==="war"?(me.role==="guest"?"Balcony":"Project"):r==="stream"?"Workspace":"Commons"}
+                </button>
+              ))}
+            </div>
+          </>}
+          {layer===1&&(
+            <button type="button" aria-label="Back to feed" onClick={()=>go(0)} className="glass btn rounded-full px-3 py-1 font-mono text-[11px] text-neutral-200 hover:bg-live hover:text-black">← Feed</button>
+          )}
+        </div>
+        <div className="flex-1 min-w-0"/>
+        {/* Counts + wallet — fully inside header, never bleed past edges */}
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-line bg-[rgba(22,25,32,.9)] backdrop-blur-md pl-2.5 pr-1.5 py-1 shrink-0 max-w-[min(100%,18rem)] overflow-hidden">
+          <GlobalCounts/>
+          <span className="text-neutral-600 select-none shrink-0" aria-hidden>|</span>
+          <Wallet bare/>
+          <RoleChip/>
+        </div>
       </div>
     </header>
 

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useGuild } from "@/lib/store";
+import { useOnboarding } from "../onboarding/OnboardingProvider";
 
 type Contribution = { id: string; type: "SUGGESTION" | "CRITIQUE" | "ENCOURAGEMENT"; messageText: string; isPinnedByHost: boolean; createdAt: string; user: { id: string; handle: string | null } };
 type JourneyNode = { id: string; dayLabel: string; phaseTitle: string; discussions: Contribution[] };
@@ -13,7 +14,8 @@ const TYPE_META: Record<Contribution["type"], { label: string; color: string; pl
 
 export default function ConnectionCockpit({ node, projectId, hostId, onContribution }: { node: JourneyNode; projectId: string; hostId: string; onContribution: () => void }) {
   const profile = useGuild((s) => s.profile);
-  const userId = (profile as any)?.id ?? profile?.handle ?? "guest";
+  const { signedIn, requireAuth, data: onb } = useOnboarding();
+  const userId = signedIn ? ((profile as any)?.id ?? onb.uid ?? "guest") : "guest";
   const isHost = (profile as any)?.id === hostId || profile?.handle === hostId;
   const [type, setType] = useState<Contribution["type"]>("SUGGESTION");
   const [text, setText] = useState("");
@@ -21,6 +23,10 @@ export default function ConnectionCockpit({ node, projectId, hostId, onContribut
   const [err, setErr] = useState<string | null>(null);
 
   const submit = async () => {
+    if (!signedIn) {
+      requireAuth("participate with a suggestion or critique");
+      return;
+    }
     if (!text.trim() || sending) return;
     setSending(true); setErr(null);
     try {
