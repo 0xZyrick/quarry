@@ -9,11 +9,11 @@ eq(kindIn(P({clientRoomIds:["n0"]}),com),"guest","client in a Commons is a spect
 eq(kindIn(P({crewRoomIds:["n0"]}),com),"co-creator","seated co-creator");
 eq(kindIn(P({creatorNodeId:"n3"}),com),"guest","visiting creator is a guest");
 eq(kindIn(null,com),"guest","signed out");
-eq(capsOf("client-owner","war").release,true,"client releases");
-eq(capsOf("owner-creator","war").release,false,"hired creator cannot release");
-eq(capsOf("guest","war").tip,false,"war guest: no tip");
+eq(capsOf("client-owner","war").pushToTalk,true,"client can use push-to-talk");
+eq(capsOf("owner-creator","war").pushToTalk,false,"hired creator does not use client push-to-talk");
 eq(capsOf("guest","commons").draw,false,"commons guest: no draw");
 eq(controlsFor("guest","war").map(c=>c.id),["chat"],"war guest: chat only");
+eq(controlsFor("client-owner","war").map(c=>c.id),["ptt"],"client gets push-to-talk only");
 eq(controlsFor("owner-creator","commons").map(c=>c.id),["stream","layout","crew"],"owner bar");
 eq(viewsFor("commons",false),["stream","commons"],"crystal views");
 eq(viewsFor("war",false),["stream","war"],"monolith, greenroom off");

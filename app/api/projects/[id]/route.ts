@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/server/db";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
-      creator: { select: { id: true, handle: true, levelTrack: true } },
+      creator: { select: { id: true, handle: true, displayName: true, avatarUrl: true, levelTrack: true } },
+      _count: { select: { followers: true, journeyNodes: true } },
       journeyNodes: {
         orderBy: { position: "asc" },
         include: {
-          mediaDrops: { orderBy: { createdAt: "asc" } },
+                        mediaDrops: { orderBy: { createdAt: "asc" } },
           discussions: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, handle: true } } } },
         },
       },

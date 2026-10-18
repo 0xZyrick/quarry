@@ -1,49 +1,67 @@
 "use client";
 import { AnimatePresence } from "framer-motion";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { EMPTY, Onboarding, isComplete, isSignedIn, onboardingAdapter } from "@/lib/onboarding";
-import { profileAdapter, SessionLost } from "@/lib/profile";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  EMPTY,
+  Onboarding,
+  canUseApp,
+  isComplete,
+  isSignedIn,
+  onboardingAdapter,
+} from "@/lib/onboarding";
 import { useGuild } from "@/lib/store";
-import Onboarding_ from "./Onboarding";
-import AuthGate from "./AuthGate";
-import PathChoiceStep from "./PathChoiceStep";
+import { profileAdapter } from "@/lib/profile";
+import OnboardingFlow from "./OnboardingFlow";
+import AuthModal from "./AuthModal";
 
 type Api = {
   data: Onboarding;
   ready: boolean;
   complete: boolean;
+  /** App chrome is usable (explored guest or signed in) */
   active: boolean;
   signedIn: boolean;
   update: (p: Partial<Onboarding>) => void;
-  /** Open auth when user tries Follow / Participate / Publish */
-  requireAuth: (reason?: string) => void;
-  dismissAuth: () => void;
-  authOpen: boolean;
-  authReason: string;
+  requireAuth: (reason: string) => void;
+  clearAuth: () => Promise<void>;
 };
 
 const Ctx = createContext<Api | null>(null);
-export const useOnboarding = () => {
+
+export function useOnboarding() {
   const c = useContext(Ctx);
   if (!c) throw new Error("OnboardingProvider missing");
   return c;
-};
+}
 
+/**
+ * Welcome → look around (guest) or Explore (sign in).
+ * requireAuth opens branded AuthModal (Drop in, Profile, etc.).
+ */
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<Onboarding>(EMPTY);
   const [ready, setReady] = useState(false);
   const [bypass, setBypass] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  const [authReason, setAuthReason] = useState("follow projects and participate");
-  const [showPath, setShowPath] = useState(false);
-  const [wasSignedIn, setWasSignedIn] = useState(false);
+  const [authReason, setAuthReason] = useState("");
 
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     if (q.get("onboarding") === "reset") {
       onboardingAdapter.clear();
       q.delete("onboarding");
-      history.replaceState(null, "", location.pathname + (q.size ? "?" + q : "") + location.hash);
+      history.replaceState(
+        null,
+        "",
+        location.pathname + (q.size ? `?${q}` : "") + location.hash
+      );
     }
     setBypass(q.has("as") && process.env.NODE_ENV !== "production");
     setData(onboardingAdapter.read());
@@ -54,94 +72,94 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     setData((d) => {
       const n = { ...d, ...p };
       onboardingAdapter.write(n);
-      // After first successful sign-in, offer path choice once
-      if (p.uid && p.name && !d.uid) {
-        setTimeout(() => setShowPath(true), 200);
-      }
       return n;
     });
   }, []);
 
-  const complete = isComplete(data);
+  const clearAuth = useCallback(async () => {
+    const response = await fetch("/api/session", { method: "DELETE" });
+    if (!response.ok) throw new Error("Could not sign out. Please try again.");
+    onboardingAdapter.clear();
+    setData({ ...EMPTY });
+    useGuild.setState({ profile: null, profileReady: true });
+  }, []);
+
+  const requireAuth = useCallback((reason: string) => {
+    setAuthReason(reason || "continue");
+    setAuthOpen(true);
+  }, []);
+
   const signedIn = isSignedIn(data);
-  const done = ready && (bypass || complete);
+  const complete = isComplete(data);
+  const active = ready && (bypass || canUseApp(data));
+  const showWelcome = ready && !bypass && !canUseApp(data);
 
+  // Resolve the server-derived room roles after sign-in; do not invent a client-side role.
   useEffect(() => {
-    if (!ready || bypass) return;
-    let live = true;
-    if (signedIn) {
-      profileAdapter
-        .get()
-        .then((p) => {
-          if (live) useGuild.setState({ profile: p, profileReady: true });
-        })
-        .catch((e) => {
-          if (live && e instanceof SessionLost) {
-            onboardingAdapter.clear();
-            setData(EMPTY);
-          }
-        });
-    } else {
-      // Guest profile so UI doesn't crash
-      useGuild.setState({
-        profile: {
-          id: "guest",
-          handle: "guest",
-          creatorNodeId: null,
-          clientRoomIds: [],
-          crewRoomIds: [],
-        },
-        profileReady: true,
+    if (!ready) return;
+    if (signedIn && data.uid && data.name) {
+      profileAdapter.get().then((profile) => {
+        useGuild.setState({ profile, profileReady: true });
+      }).catch(() => {
+        useGuild.setState({ profile: null, profileReady: true });
       });
+    } else {
+      useGuild.setState({ profile: null, profileReady: true });
     }
-    return () => {
-      live = false;
-    };
-  }, [ready, bypass, signedIn, data.uid]);
+  }, [ready, signedIn, data.uid, data.name, data.track]);
 
   useEffect(() => {
-    const on = ready && !done;
-    document.documentElement.toggleAttribute("data-onboarding", on);
-  }, [ready, done]);
+    const onAuth = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      requireAuth(typeof detail === "string" ? detail : "continue");
+    };
+    window.addEventListener("wippo:auth", onAuth);
+    return () => window.removeEventListener("wippo:auth", onAuth);
+  }, [requireAuth]);
 
-  const requireAuth = useCallback(
-    (reason?: string) => {
-      if (isSignedIn(data)) return;
-      if (reason) setAuthReason(reason);
-      setAuthOpen(true);
-    },
-    [data]
-  );
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-onboarding", showWelcome);
+  }, [showWelcome]);
 
-  const api = useMemo(
+  const api = useMemo<Api>(
     () => ({
       data,
       ready,
       complete,
-      active: done,
+      active,
       signedIn,
       update,
       requireAuth,
-      dismissAuth: () => setAuthOpen(false),
-      authOpen,
-      authReason,
+      clearAuth,
     }),
-    [data, ready, complete, done, signedIn, update, requireAuth, authOpen, authReason]
+    [data, ready, complete, active, signedIn, update, requireAuth, clearAuth]
   );
 
   return (
     <Ctx.Provider value={api}>
       {children}
-      <AnimatePresence>{ready && !done && <Onboarding_ key="welcome" />}</AnimatePresence>
-      {authOpen && !signedIn && (
-        <AuthGate
-          reason={authReason}
-          onClose={() => setAuthOpen(false)}
-        />
-      )}
-      {showPath && signedIn && !data.pathChoice && (
-        <PathChoiceStep onDone={() => setShowPath(false)} />
-      )}
+
+      {/* First visit / incomplete profile — unified flow */}
+      <AnimatePresence>
+        {showWelcome && (
+          <div className="fixed inset-0 z-[60]">
+            <OnboardingFlow
+              key="onboarding"
+              onFinished={() => {
+                /* explored/signed flags written inside flow */
+              }}
+            />
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Drop in / Profile gate */}
+      <AuthModal
+        open={authOpen}
+        reason={authReason}
+        onClose={() => setAuthOpen(false)}
+        onSuccess={() => setAuthOpen(false)}
+      />
     </Ctx.Provider>
   );
 }

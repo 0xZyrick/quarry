@@ -1,7 +1,6 @@
 "use client";
 import {useEffect,useRef,useState} from "react";
 import {useChat,connectChat} from "@/lib/chat";
-import {useRT} from "@/lib/realtime";
 import ReportSheet from "../safety/ReportSheet";
 import {roomControl} from "@/lib/safety";
 import {useRoomSecurity} from "@/lib/store";
@@ -9,16 +8,18 @@ import {useRoomCtl} from "@/lib/roomCtl";
 // Live Log Split: guest text and platform system triggers share one stream. Owners and clients can hover a text line and Pass the Mic.
 export default function ChatPanel({className=""}:{className?:string}){
   const sec=useRoomSecurity(),log=useChat(s=>s.log),requests=useChat(s=>s.requests),slots=useChat(s=>s.slots);
+  const connection=useChat(s=>s.connection),error=useChat(s=>s.error);
   const open=useRoomCtl(s=>s.chatOpen);
   const [rep,setRep]=useState<string|null>(null),[text,setText]=useState(""),end=useRef<HTMLDivElement>(null),room=sec.room.id;
-  useEffect(()=>connectChat(room,n=>useRT.getState().addTip(n)),[room]);
+  useEffect(()=>connectChat(room),[room]);
   const mine=log.filter(m=>m.room===room);
   useEffect(()=>{end.current?.scrollIntoView({block:"end"})},[mine.length]);
-  const send=()=>{useChat.getState().say(room,sec.self,text);setText("")};
+  const send=async()=>{if(await useChat.getState().say(room,sec.self,text))setText("")};
   return <aside aria-label="Room chat" onPointerDown={e=>e.stopPropagation()}
     className={`glass rounded-xl flex-col min-h-0 ${open?"flex":"hidden md:flex"} ${className}`}>
     <div className="px-3 py-2 font-mono text-[10px] text-neutral-400 flex justify-between border-b border-line">
-      <span>LIVE LOG</span><span>{slots.length?`🎙️ ${slots.map(s=>"@"+s).join(" ")}`:requests.length?`${requests.length} mic request${requests.length>1?"s":""}`:""}</span></div>
+      <span>LIVE LOG · {connection==="server"?"CONNECTED":connection==="connecting"?"CONNECTING":"OFFLINE"}</span><span>{slots.length?`🎙️ ${slots.map(s=>"@"+s).join(" ")}`:requests.length?`${requests.length} mic request${requests.length>1?"s":""}`:""}</span></div>
+    {error&&<p role="alert" className="px-3 pt-2 text-[10px] text-red-400">{error}</p>}
     <div role="log" aria-live="polite" className="flex-1 overflow-auto p-2 space-y-1.5 text-xs">
       {mine.map(m=>m.kind==="system"
         ?<div key={m.id} className="rounded px-2 py-1 font-mono text-[10px] text-community bg-community/10">{m.text}</div>

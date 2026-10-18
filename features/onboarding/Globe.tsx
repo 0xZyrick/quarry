@@ -1,7 +1,6 @@
 "use client";
 import {useEffect, useRef} from "react";
 import {ZONES} from "@/lib/map";
-import {ZONE_GEO} from "@/lib/onboarding";
 
 const TAU = Math.PI * 2, DUR = 2200;
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -24,7 +23,7 @@ export default function Globe({target, onLanded, onArrive, reduce: reduceProp}: 
     const g = c.getContext("2d")!,
       dpr = Math.min(2, devicePixelRatio || 1),
       reduce = reduceProp ?? matchMedia("(prefers-reduced-motion:reduce)").matches;
-    const zs = ZONES.filter((z) => ZONE_GEO[z.id]).map((z) => ({id: z.id, name: z.name.replace(/ Craft Zone$/, "").replace(/ Phase 1$/, ""), lat: rad(ZONE_GEO[z.id][0]), lng: rad(ZONE_GEO[z.id][1])}));
+    const zs = ZONES.map((z) => ({id: z.id, name: z.name.replace(/ Craft Zone$/, "").replace(/ Phase 1$/, ""), lat: rad(z.y * 20), lng: rad(z.x * 30)}));
     // background starfield dots (static)
     const dots = Array.from({length: 180}, () => ({lat: (Math.random() - 0.5) * Math.PI, lng: Math.random() * TAU}));
     let W = 0, H = 0;

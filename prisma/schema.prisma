@@ -3,77 +3,145 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// ─── Experience C: Narrative Progression Models ─────────────────────────────
-// Core philosophy: every surface must surface Intent, Decisions, Progress, Participation.
-// Raw, contextless streams are rejected. Projects are the narrative umbrella.
+// ─── Core social + narrative models ─────────────────────────────────────────
 
 model User {
-  id          String         @id
-  handle      String?        @unique
-  levelTrack  String         @default("rising_craftsman")
-  projects    Project[]
+  id          String   @id
+  handle      String?  @unique
+  email       String?  @unique
+  accountTrack String?
+  displayName String?
+  bio         String?
+  avatarUrl   String?
+  gender      String?  // male | female — simple avatar seed
+  interests   String[] @default([])
+  levelTrack  String   @default("rising_craftsman")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects      Project[]
   contributions Contribution[]
-  follows       ProjectFollow[]
-  wallet      Wallet?
-  createdAt   DateTime       @default(now())
+  projectFollows ProjectFollow[]
+
+  // Person graph
+  following UserFollow[] @relation("UserFollowing")
+  followers UserFollow[] @relation("UserFollowers")
+}
+
+model PendingEmailAuth {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  handle       String   @unique
+  accountTrack String
+  linkUid      String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Project {
-  id               String         @id @default(uuid())
-  creatorId        String
-  creator          User           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  title            String
-  intentStatement  String         // Goal: what am I trying to accomplish?
-  currentState     String?        // Lightweight: what am I working on / figuring out?
-  nextStep         String?        // Lightweight: what am I trying next?
-  status           ProjectStatus  @default(IN_PROGRESS)
-  journeyNodes     JourneyNode[]
-  workSessions     WorkSession[]
-  followers        ProjectFollow[]
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id              String        @id @default(uuid())
+  creatorId       String
+  creator         User          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title           String
+  intentStatement String
+  coverImageUrl   String?
+  currentState    String?
+  nextStep        String?
+  status          ProjectStatus @default(IN_PROGRESS)
+  visibility      ProjectVisibility @default(PUBLIC)
+  zoneId          String?           // forge | atelier | arcade | commons | bay | shed
+  /// Stack / craft tags (auto-feed profile skills)
+  tags            String[]          @default([])
+  journeyNodes    JourneyNode[]
+  workSessions    WorkSession[]
+  followers       ProjectFollow[]
+  helpRequests    HelpRequest[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
   @@index([creatorId])
   @@index([status])
+  @@index([visibility])
+  @@index([zoneId])
 }
 
 enum ProjectStatus {
   IN_PROGRESS
   COMPLETED
+  PAUSED
+}
+
+enum ProjectVisibility {
+  PUBLIC
+  CIRCLE
+  PRIVATE
 }
 
 model JourneyNode {
-  id            String         @id @default(uuid())
-  projectId     String
-  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  position      Int
-  dayLabel      String
-  phaseTitle    String
-  summaryText   String
+  id              String         @id @default(uuid())
+  projectId       String
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  position        Int
+  dayLabel        String
+  phaseTitle      String
+  summaryText     String
   prevSnapshotUrl String?
   nextSnapshotUrl String?
   evolutionDelta  String?
-  mediaDrops    MediaDrop[]
-  discussions   Contribution[]
-  createdAt     DateTime       @default(now())
+  /// External live URL pasted by creator (Twitch / YouTube Live) — never streamed by Wippo
+  liveUrl         String?
+  /// Platform of liveUrl: twitch | youtube | other
+  livePlatform    String?
+  /// Archived VOD URL resolved after session ends
+  vodUrl          String?
+  /// How this update should surface on profile "how they think"
+  updateKind      UpdateKind     @default(MILESTONE)
+  /// LLM / helper prompt used during this stop (optional)
+  promptUsed      String?
+  /// Tools tagged on this update (Figma, Claude, Three.js, …)
+  tools           String[]       @default([])
+  /// Still images for this update (max enforced in API)
+  imageUrls       String[]       @default([])
+  sessionStartedAt DateTime?
+  sessionEndedAt   DateTime?
+  mediaDrops      MediaDrop[]
+  discussions     Contribution[]
+  workSessions    WorkSession[]
+  triedAttempts   TriedAttempt[]
+  helpRequests    HelpRequest[]
+  createdAt       DateTime       @default(now())
+
   @@index([projectId, position])
+  @@index([sessionEndedAt])
 }
 
 model MediaDrop {
-  id            String       @id @default(uuid())
-  journeyNodeId String
-  journeyNode   JourneyNode  @relation(fields: [journeyNodeId], references: [id], onDelete: Cascade)
-  type          DropType
-  videoUrl      String
-  durationSecs  Int
+  id             String      @id @default(uuid())
+  journeyNodeId  String
+  journeyNode    JourneyNode @relation(fields: [journeyNodeId], references: [id], onDelete: Cascade)
+  type           DropType
+  videoUrl       String
+  durationSecs   Int
   decisionMetric String?
-  tag           String?
-  isLiveExtract Boolean      @default(false)
-  createdAt     DateTime     @default(now())
+  tag            String?
+  isLiveExtract  Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+
   @@index([journeyNodeId])
+}
+
+enum UpdateKind {
+  MILESTONE
+  DEAD_END
+  DECISION
+  PARTIAL
 }
 
 enum DropType {
@@ -90,9 +158,14 @@ model Contribution {
   type           ActionType
   messageText    String
   isPinnedByHost Boolean     @default(false)
+  /// Host marked this helper's contribution as useful → shows on helper profile
+  markedHelpful  Boolean     @default(false)
+  markedHelpfulAt DateTime?
   createdAt      DateTime    @default(now())
+
   @@index([journeyNodeId])
   @@index([userId])
+  @@index([markedHelpful, userId])
 }
 
 enum ActionType {
@@ -101,32 +174,34 @@ enum ActionType {
   ENCOURAGEMENT
 }
 
-
-
-// 05 Work Session — where work is happening now (live, recorded, or progress-linked)
 model WorkSession {
-  id            String          @id @default(uuid())
-  creatorId     String
-  projectId     String?         // optional link to Project Journey
-  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  title         String
-  // Lightweight context (optional, reusable)
-  goal          String?
-  currentState  String?
-  nextStep      String?
-
-  visibility    SessionVisibility @default(PUBLIC)
-  mode          SessionMode       @default(LIVE)
-  roomId        String?           // maps to existing Commons/War room when live
-  isActive      Boolean           @default(true)
-
-  createdAt     DateTime          @default(now())
-  endedAt       DateTime?
+  id           String            @id @default(uuid())
+  creatorId    String
+  projectId    String?
+  project      Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  journeyNodeId String?
+  journeyNode  JourneyNode?      @relation(fields: [journeyNodeId], references: [id], onDelete: SetNull)
+  title        String
+  goal         String?
+  currentState String?
+  nextStep     String?
+  visibility   SessionVisibility @default(PUBLIC)
+  mode         SessionMode       @default(LIVE)
+  roomId       String?
+  /// Pasted Twitch / YouTube Live URL for iframe embed
+  liveUrl      String?
+  livePlatform String?
+  /// Filled when session ends (API / job)
+  vodUrl       String?
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  endedAt      DateTime?
 
   @@index([creatorId])
   @@index([projectId])
+  @@index([journeyNodeId])
   @@index([visibility, isActive])
+  @@index([roomId])
 }
 
 enum SessionVisibility {
@@ -140,47 +215,163 @@ enum SessionMode {
   PROGRESS_UPDATE
 }
 
-model ProjectFollow {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// One row per ended session — powers Last 12 Weeks activity grid (date only)
+model SessionShip {
+  id        String   @id @default(uuid())
+  userId    String
+  projectId String?
+  nodeId    String?
+  /// UTC day bucket YYYY-MM-DD for cheap range queries
+  dayKey    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, dayKey])
+  @@index([userId, createdAt])
+}
+
+
+/// Explicit outcome rows on an update (Dead end / Partial / Worked)
+model TriedAttempt {
+  id            String       @id @default(uuid())
+  journeyNodeId String
+  journeyNode   JourneyNode  @relation(fields: [journeyNodeId], references: [id], onDelete: Cascade)
+  outcome       TriedOutcome
+  detail        String
+  sortOrder     Int          @default(0)
+  createdAt     DateTime     @default(now())
+
+  @@index([journeyNodeId])
+}
+
+enum TriedOutcome {
+  DEAD_END
+  PARTIAL
+  WORKED
+  ARTIFACT
+}
+
+/// Open ask for help on a project (and optional node)
+model HelpRequest {
+  id          String           @id @default(uuid())
   projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lastSeenAt  DateTime @default(now()) // Return loop: "what changed since you left"
-  createdAt   DateTime @default(now())
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  nodeId      String?
+  journeyNode JourneyNode?     @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  creatorId   String
+  title       String
+  body        String?
+  tags        String[]         @default([])
+  status      HelpRequestStatus @default(OPEN)
+  claimedById String?
+  claimedAt   DateTime?
+  createdAt   DateTime         @default(now())
+  closedAt    DateTime?
+
+  @@index([projectId, status])
+  @@index([status, createdAt])
+  @@index([creatorId])
+}
+
+enum HelpRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+/// Lightweight presence in a live room (projectId / roomId)
+model RoomPresence {
+  id         String   @id @default(uuid())
+  roomId     String
+  userId     String
+  handle     String?
+  lastSeenAt DateTime @default(now())
+  joinedAt   DateTime @default(now())
+
+  @@unique([roomId, userId])
+  @@index([roomId, lastSeenAt])
+}
+
+/// Circle: user follows a project (progress stream)
+model ProjectFollow {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   @@unique([userId, projectId])
   @@index([userId])
   @@index([projectId])
 }
 
-// ─── Paystack / Wallet Ledger (secondary, quiet tracking) ───────────────────
+/// Social graph: user follows a person
+model UserFollow {
+  id          String   @id @default(uuid())
+  followerId  String
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
 
-model Wallet {
-  id     String @id @default(uuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  paystackSubaccountCode String? @unique
-  dedicatedBankNumber    String? @unique
-  dedicatedBankName      String?
-  internalCreditBalance Int    @default(0)
-  currency              String @default("NGN")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
 }
 
-model TransactionLedger {
-  id          String   @id @default(uuid())
-  senderId    String?
-  receiverId  String?
-  amountKobo  Int
-  type        String
-  status      String
-  reference   String   @unique
-  roomId      String?
-  milestoneId String?
-  createdAt   DateTime @default(now())
-  @@index([roomId, milestoneId])
+// ─── Messaging + notifications ──────────────────────────────────────────────
+
+model Conversation {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  members   ConversationMember[]
+  messages  Message[]
+}
+
+model ConversationMember {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  lastReadAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
   @@index([senderId])
-  @@index([receiverId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // circle_update | follow | message | contribute
+  title     String
+  body      String?
+  href      String?
+  read      Boolean  @default(false)
+  meta      String?  // JSON blob
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+}
+
+/// Optional: which zone a user calls home (continuity)
+model UserHome {
+  userId    String   @id
+  zoneId    String
+  updatedAt DateTime @updatedAt
 }

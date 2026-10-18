@@ -1,31 +1,13 @@
 "use client";
-import {motion,animate,useMotionValue,useReducedMotion} from "framer-motion";
-import {useEffect,useRef,useState} from "react";
-import {createPortal} from "react-dom";
+import {motion} from "framer-motion";
+import {useState} from "react";
 import {useGuild,useRole} from "@/lib/store";
 import ControlBar from "../room/ControlBar";
-import {PAYMENTS_ON} from "@/lib/flags";
 import ChatPanel from "../room/ChatPanel";
 import LoopVideo from "../shared/LoopVideo";
 import {BROADCAST_SRC} from "@/lib/media";
 import {applyToRaid} from "@/lib/raid";
-import {isLow} from "@/lib/perf";
 import Avatar from "../shared/Avatar";
-
-// level = escrow still held / total. The surface has a travelling wave; while a transaction is pending the tank dims and pulses.
-function Tank({level,color,pending}:{level:number;color:string;pending:boolean}){
-  const reduce=useReducedMotion(),still=reduce||isLow();
-  const y=136-132*level;
-  return <svg viewBox="0 0 100 140" className="w-24" role="img" aria-label={`Escrow tank ${Math.round(level*100)}% full${pending?", transaction pending":""}`}>
-    <defs><clipPath id="t"><rect x="4" y="4" width="92" height="132" rx="12"/></clipPath></defs>
-    <rect x="4" y="4" width="92" height="132" rx="12" fill="#0D0E11" stroke={pending?"#FF6B00":"#242936"} strokeWidth="2" strokeDasharray={pending?"6 4":undefined}/>
-    <g clipPath="url(#t)"><motion.g fill={color} initial={false} animate={{y,opacity:pending?[.5,.85,.5]:.85}}
-        transition={{y:{duration:1,ease:"easeInOut"},opacity:pending?{duration:1.1,repeat:Infinity}:{duration:.3}}}>
-      <rect x="0" y="0" width="100" height="144"/>
-      <motion.path d="M-50 0 Q-37.5 -6 -25 0 T0 0 T25 0 T50 0 T75 0 T100 0 T125 0 V6 H-50Z" initial={false}
-        animate={still?{x:0}:{x:[0,50]}} transition={still?undefined:{duration:2.4,repeat:Infinity,ease:"linear"}}/>
-    </motion.g></g></svg>;
-}
 
 function Timelapse({title,onClose}:{title:string;onClose:()=>void}){ // swap bars for a looping compressed clip
   return <motion.div initial={{opacity:0,scale:.96}} animate={{opacity:1,scale:1}} className="absolute inset-3 glass rounded-lg z-10 overflow-hidden">
@@ -39,21 +21,16 @@ function Timelapse({title,onClose}:{title:string;onClose:()=>void}){ // swap bar
 }
 
 export default function WarRoom(){
-  const {milestones,release,releasing,pending,layer,room,roomId}=useGuild(),me=useRole();
-  const active=milestones.find(m=>m.status==="active");
-  const color=active?.risk==="risk"?"#FF6B00":"#00FF66";
-  const total=milestones.reduce((a,m)=>a+m.amount,0),held=milestones.filter(m=>m.status!=="done").reduce((a,m)=>a+m.amount,0);
-  const level=total?(held-(releasing&&active?active.amount:0))/total:0;
+  const {layer,room,roomId}=useGuild(),me=useRole();
+  const roleLabel=me.host?"CREATOR · HOST":me.role==="creator"?"CREATOR · VISITOR":me.role==="client"?"PROJECT OWNER":"GUEST";
   const [applying,setApplying]=useState(false),[note,setNote]=useState(""),[appState,setAppState]=useState<"idle"|"sending"|"sent"|"error">("idle");
   const send=async()=>{setAppState("sending");try{await applyToRaid(roomId,note);setAppState("sent")}catch{setAppState("error")}};
-  const [tl,setTl]=useState<string|null>(null);const tank=useRef<HTMLDivElement>(null);const [burst,setBurst]=useState<any>(null);
-  useEffect(()=>{if(releasing&&tank.current){const r=tank.current.getBoundingClientRect();
-    setBurst({k:Date.now(),x:r.left+r.width/2,y:r.top+r.height/2,c:color});setTimeout(()=>setBurst(null),1800)}},[releasing]);
+  const [tl,setTl]=useState<string|null>(null);
   return <div className="relative h-full pt-14 pb-24 px-3 grid grid-rows-[1fr_1.2fr] gap-3 md:grid-rows-1 md:grid-cols-[62fr_38fr]">
     <div className="flex flex-col gap-3 min-h-0">
       <div className="glass rounded-xl flex-1 relative grid place-items-center text-live font-mono text-xs">
         <span className="absolute top-2 left-2 z-10 flex items-center gap-1.5"><i className="w-2 h-2 rounded-full bg-live pulse"/>LIVE · 1080p</span>
-        {me.role==="guest"&&<span className="absolute top-2 right-2 z-10 glass rounded-full px-2 py-0.5 text-[10px] text-community">BALCONY · read-only</span>}
+        <span className="absolute top-2 right-2 z-10 glass rounded-full px-2.5 py-1 text-[9px] uppercase tracking-[0.12em] text-community">{roleLabel}</span>
         <span className="opacity-40">NO SIGNAL</span><LoopVideo src={BROADCAST_SRC} active={layer===2&&room==="war"} className="absolute inset-0 w-full h-full object-cover rounded-xl opacity-90"/>{tl&&<Timelapse title={tl} onClose={()=>setTl(null)}/>}</div>
       <div className="glass rounded-xl p-3 flex items-center gap-2">
         <span className="text-xs text-neutral-400">{me.host?"YOUR RAID":"THE BENCH"}</span>
@@ -81,22 +58,9 @@ export default function WarRoom(){
             <button onClick={send} disabled={!note.trim()||appState==="sending"}
               className="btn rounded-full bg-live text-black text-xs font-semibold px-4 py-1.5 disabled:opacity-40">{appState==="sending"?"Sending…":"Send"}</button></div></>}
       </motion.div>}</div>
-    <div className="flex flex-col gap-2 min-h-0 flex-1">
-    <div className="glass rounded-xl p-3 flex gap-3 shrink-0 max-h-[42%] overflow-auto">
-      <ol className="flex-1 space-y-1.5">{milestones.map(m=>
-        <li key={m.id} onClick={()=>m.status==="done"&&setTl(m.title)} className={`rounded-lg border p-2 text-sm btn ${m.status==="done"?"border-line text-neutral-400 hover:border-community cursor-pointer"
-          :m.status==="active"?(m.risk==="risk"?"border-risk text-risk":"border-live text-live")+" pulse":"border-line text-neutral-500"}`}>
-          <div className="flex justify-between gap-2"><span className="truncate">{m.status==="done"?"✓ ":""}{m.title}</span>
-          <span className="font-mono shrink-0">${m.amount.toLocaleString()}</span></div></li>)}</ol>
-      <div className="flex flex-col items-center gap-1.5 w-24 shrink-0">
-        <div ref={tank}><Tank level={level} color={color} pending={pending}/></div>
-        <div className="font-mono text-[10px] text-center">{active?`$${active.amount.toLocaleString()} Pool`:"Empty"}</div>
-        {active&&<div className="text-[9px] text-neutral-500 text-center">{me.release?(PAYMENTS_ON?"Release below":"Payments soon"):me.role==="guest"?"Spectator":"Client releases"}</div>}</div>
+    <div className="min-h-0 flex-1">
+      <ChatPanel className="h-full min-h-[12rem]"/>
     </div>
-    <ChatPanel className="flex-1 min-h-[12rem]"/></div>
     <ControlBar/>
-    {burst&&createPortal(<>{Array.from({length:isLow()?6:14}).map((_,i)=><motion.i key={burst.k+"-"+i}
-      className="fixed z-50 w-2 h-2 rounded-full pointer-events-none" style={{background:burst.c,left:burst.x,top:burst.y}}
-      initial={{opacity:1,scale:1}} animate={{left:innerWidth-60,top:24,opacity:[1,1,0],scale:.5}}
-      transition={{duration:.9,delay:i*.04,ease:[.4,0,.2,1]}}/>)}</>,document.body)}</div>;
+  </div>;
 }

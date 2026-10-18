@@ -5,35 +5,28 @@ export type Zone={id:string;name:string;city:string;x:number;y:number;r:number};
 export type MapNode={id:string;name:string;city:string;zone:string;status:Status};
 export const COLOR:Record<Status,string>={live:"#00FF66",risk:"#FF6B00",community:"#00A3FF"};
 export const ZONES:Zone[]=[
- {id:"lekki1",name:"Lekki Phase 1 Craft Zone",city:"Lagos",x:2.1,y:.5,r:.55},
- {id:"ikeja",name:"Ikeja Craft Zone",city:"Lagos",x:-.6,y:1.9,r:.55},
- {id:"yaba",name:"Yaba Craft Zone",city:"Lagos",x:.7,y:1.3,r:.55},
- {id:"vi",name:"Victoria Island Craft Zone",city:"Lagos",x:.6,y:-.1,r:.55},
- {id:"kreuzberg",name:"Kreuzberg Craft Zone",city:"Berlin",x:1.3,y:5.3,r:.5},
- {id:"westlands",name:"Westlands Craft Zone",city:"Nairobi",x:3.7,y:-.1,r:.5},
- {id:"shoreditch",name:"Shoreditch Craft Zone",city:"London",x:0,y:5.2,r:.5},
- {id:"bandra",name:"Bandra Craft Zone",city:"Mumbai",x:7.3,y:1.9,r:.5},
- {id:"bk",name:"Brooklyn Craft Zone",city:"New York",x:-7.4,y:4.1,r:.5},
- {id:"pinheiros",name:"Pinheiros Craft Zone",city:"Sao Paulo",x:-4.7,y:-2.3,r:.5},
- {id:"shibuya",name:"Shibuya Craft Zone",city:"Tokyo",x:14,y:3.6,r:.5},
- {id:"soma",name:"SoMa Craft Zone",city:"San Francisco",x:-12.2,y:3.8,r:.5},
- {id:"surry",name:"Surry Hills Craft Zone",city:"Sydney",x:15.1,y:-3.4,r:.5}];
+ {id:"forge",name:"The Forge",city:"Lagos",x:-2.5,y:1.5,r:.75},
+ {id:"atelier",name:"Atelier",city:"Berlin",x:0,y:2.2,r:.75},
+ {id:"arcade",name:"Arcade",city:"Nairobi",x:2.5,y:1.5,r:.75},
+ {id:"commons",name:"Commons",city:"London",x:0,y:0,r:.85},
+ {id:"bay",name:"The Bay",city:"Mumbai",x:-2,y:-1.8,r:.7},
+ {id:"shed",name:"The Shed",city:"New York",x:2,y:-1.8,r:.7}];
 // first three nodes are the feed creators (clip index -> node)
 export const NODES:MapNode[]=[
- {id:"n0",name:"mira.design",city:"Lagos",zone:"lekki1",status:"live"},
- {id:"n1",name:"kodo.dev",city:"Berlin",zone:"kreuzberg",status:"risk"},
- {id:"n2",name:"ayo.ui",city:"Nairobi",zone:"westlands",status:"community"},
- {id:"n3",name:"lena",city:"London",zone:"shoreditch",status:"community"},
- {id:"n4",name:"ravi",city:"Mumbai",zone:"bandra",status:"live"},
- {id:"n5",name:"sade",city:"New York",zone:"bk",status:"risk"},
- {id:"n6",name:"tunde",city:"Sao Paulo",zone:"pinheiros",status:"live"},
- {id:"n7",name:"hana",city:"Tokyo",zone:"shibuya",status:"community"},
- {id:"n8",name:"leo",city:"San Francisco",zone:"soma",status:"live"},
- {id:"n9",name:"zoe",city:"Sydney",zone:"surry",status:"risk"},
- {id:"n10",name:"chidi.3d",city:"Lagos",zone:"lekki1",status:"community"},
- {id:"n11",name:"funmi",city:"Lagos",zone:"yaba",status:"live"},
- {id:"n12",name:"bayo.ink",city:"Lagos",zone:"ikeja",status:"risk"},
- {id:"n13",name:"amaka",city:"Lagos",zone:"vi",status:"community"}];
+ {id:"n0",name:"mira.design",city:"Lagos",zone:"forge",status:"live"},
+ {id:"n1",name:"kodo.dev",city:"Berlin",zone:"atelier",status:"risk"},
+ {id:"n2",name:"ayo.ui",city:"Nairobi",zone:"arcade",status:"community"},
+ {id:"n3",name:"lena",city:"London",zone:"bay",status:"community"},
+ {id:"n4",name:"ravi",city:"Mumbai",zone:"shed",status:"live"},
+ {id:"n5",name:"sade",city:"New York",zone:"commons",status:"risk"},
+ {id:"n6",name:"tunde",city:"Sao Paulo",zone:"forge",status:"live"},
+ {id:"n7",name:"hana",city:"Tokyo",zone:"atelier",status:"community"},
+ {id:"n8",name:"leo",city:"San Francisco",zone:"arcade",status:"live"},
+ {id:"n9",name:"zoe",city:"Sydney",zone:"bay",status:"risk"},
+ {id:"n10",name:"chidi.3d",city:"Lagos",zone:"forge",status:"community"},
+ {id:"n11",name:"funmi",city:"Lagos",zone:"commons",status:"live"},
+ {id:"n12",name:"bayo.ink",city:"Lagos",zone:"shed",status:"risk"},
+ {id:"n13",name:"amaka",city:"Lagos",zone:"atelier",status:"community"}];
 export const zoneOf=(n:MapNode)=>ZONES.find(z=>z.id===n.zone)!;
 // Seeded scatter inside the ring: angle and radius come from a hash of the node id, never from where anyone works.
 const hash=(s:string)=>{let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0)/4294967296};

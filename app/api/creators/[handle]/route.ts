@@ -1,33 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/server/db";
 
-/**
- * GET /api/creators/[handle]
- * Network layer: creator journey profile — history of work as evolving stories,
- * not a static portfolio of outcomes.
- */
-export async function GET(_req: NextRequest, { params }: { params: { handle: string } }) {
-  const handle = decodeURIComponent(params.handle);
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { handle: string } }
+) {
+  const handle = decodeURIComponent(params.handle).replace(/^@/, "");
   const user = await prisma.user.findFirst({
     where: { handle },
     select: {
       id: true,
       handle: true,
+      displayName: true,
+      bio: true,
+      avatarUrl: true,
       levelTrack: true,
       createdAt: true,
+      _count: {
+        select: {
+          projects: true,
+          followers: true,
+          following: true,
+          projectFollows: true,
+        },
+      },
       projects: {
+        where: { visibility: "PUBLIC" },
         orderBy: { updatedAt: "desc" },
         include: {
           journeyNodes: {
             orderBy: { position: "asc" },
-            include: { mediaDrops: { take: 1, orderBy: { createdAt: "desc" } } },
+            include: {
+              mediaDrops: { take: 1, orderBy: { createdAt: "desc" } },
+            },
           },
           _count: { select: { followers: true } },
         },
       },
     },
   });
+
   if (!user) return NextResponse.json({ error: "Creator not found" }, { status: 404 });
 
   const journeys = user.projects.map((p) => ({
@@ -43,12 +56,27 @@ export async function GET(_req: NextRequest, { params }: { params: { handle: str
       summary: n.summaryText,
       evolutionDelta: n.evolutionDelta,
       mediaUrl: n.mediaDrops[0]?.videoUrl ?? null,
+      thumbUrl: n.nextSnapshotUrl || n.prevSnapshotUrl || null,
       tag: n.mediaDrops[0]?.tag ?? null,
     })),
   }));
 
   return NextResponse.json({
-    creator: { id: user.id, handle: user.handle, levelTrack: user.levelTrack, joinedAt: user.createdAt },
+    creator: {
+      id: user.id,
+      handle: user.handle,
+      displayName: user.displayName || user.handle,
+      bio: user.bio || "",
+      avatarUrl: user.avatarUrl,
+      levelTrack: user.levelTrack,
+      joinedAt: user.createdAt,
+      counts: {
+        projects: user._count.projects,
+        followers: user._count.followers,
+        following: user._count.following,
+        circles: user._count.projectFollows,
+      },
+    },
     journeys,
   });
 }

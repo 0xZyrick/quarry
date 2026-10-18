@@ -19,7 +19,7 @@ export async function POST(req:Request){
     const canvas=CANVAS_SOURCES.includes(b.canvas)?b.canvas:null,skill=typeof b.skill==="string"?b.skill.slice(0,40):null;
     // Launch Portal declaration: room title, craft tags, environment, and which input path feeds the desk. All sanitised here.
     const meta=typeof b.title==="string"?{title:b.title.replace(/\s+/g," ").trim().slice(0,60),
-      tags:(Array.isArray(b.tags)?b.tags:[]).filter((t:unknown)=>typeof t==="string"&&CREATOR_TAGS.includes(t)).slice(0,5),
+      tags:(Array.isArray(b.tags)?CREATOR_TAGS.filter(tag=>b.tags.includes(tag)):[]).slice(0,5),
       env:b.env==="focus"?"focus" as const:"sandbox" as const,path:b.path==="digital"||b.path==="physical"?b.path as "digital"|"physical":null,
       zone:ZONES.some(z=>z.id===b.zone)?String(b.zone):null}:undefined;
     if(meta&&!meta.title)return json({error:"give the room a title"},422);

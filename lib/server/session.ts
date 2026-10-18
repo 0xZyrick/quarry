@@ -15,4 +15,3 @@ export function readSession(req:Request):Session|null{
   try{const j=JSON.parse(Buffer.from(m[1],"base64url").toString());if(!j||j.exp<Date.now()||typeof j.uid!=="string"||typeof j.handle!=="string")return null;
     return{uid:j.uid,handle:j.handle.slice(0,32),track:j.track==="creator"||j.track==="client"?j.track:null}}catch{return null}}
 export const isModerator=(s:Session|null)=>!!s&&((process.env.MODERATOR_UIDS??"").split(",").includes(s.uid)||(process.env.NODE_ENV!=="production"&&s.uid==="u-mod"));
-export const isArbiter=(s:Session|null)=>!!s&&((process.env.ARBITER_UIDS??"").split(",").includes(s.uid)||(process.env.NODE_ENV!=="production"&&s.uid==="u-arbiter"));

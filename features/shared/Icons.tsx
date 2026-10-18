@@ -46,18 +46,6 @@ export const IconBrush = (p: P) => (
 export const IconLeave = (p: P) => (
   <Svg {...p}><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Svg>
 );
-export const IconLock = (p: P) => (
-  <Svg {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></Svg>
-);
-export const IconAlert = (p: P) => (
-  <Svg {...p}><path d="M10.3 3.3L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.3a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>
-);
-export const IconCoin = (p: P) => (
-  <Svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h4.5a1.5 1.5 0 010 3H9"/></Svg>
-);
-export const IconHand = (p: P) => (
-  <Svg {...p}><path d="M18 11V6a2 2 0 00-4 0v1M14 7V4a2 2 0 00-4 0v4M10 8V5a2 2 0 00-4 0v9l-1.5-1.5a2 2 0 00-3 2.7L8 22h10a3 3 0 003-3v-6a2 2 0 00-2-2h-1"/></Svg>
-);
 export const IconSofa = (p: P) => (
   <Svg {...p}><path d="M4 13v5a1 1 0 001 1h14a1 1 0 001-1v-5"/><path d="M4 13a2 2 0 01-2-2V9a2 2 0 012-2h2v6H4zM20 13a2 2 0 002-2V9a2 2 0 00-2-2h-2v6h2z"/><path d="M8 7h8v6H8z"/></Svg>
 );
@@ -73,10 +61,24 @@ export const IconUsers = (p: P) => (
 export const IconLive = (p: P) => (
   <Svg {...p}><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></Svg>
 );
+export const IconReact = (p: P) => (
+  <Svg {...p}><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></Svg>
+);
+export const IconReactFilled = (p: P) => (
+  <svg width={p.size ?? 14} height={p.size ?? 14} viewBox="0 0 24 24" fill="currentColor" aria-hidden {...p}>
+    <path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/>
+  </svg>
+);
+export const IconUserPlus = (p: P) => (
+  <Svg {...p}><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></Svg>
+);
+export const IconCheck = (p: P) => (
+  <Svg {...p}><polyline points="20 6 9 17 4 12"/></Svg>
+);
 
-/** Map control id → icon component for ControlBar */
+/** Control id → icon component for ControlBar */
 export const CTL_ICON: Record<string, (p: P) => JSX.Element> = {
   stream: IconVideo, layout: IconSettings, crew: IconPlus, greenroom: IconSofa,
-  voice: IconMic, draw: IconBrush, leave: IconLeave, release: IconLock,
-  ptt: IconMic, dispute: IconAlert, tip: IconCoin, chat: IconChat, mic: IconHand,
+  voice: IconMic, draw: IconBrush, leave: IconLeave,
+  ptt: IconMic, chat: IconChat, mic: IconMic,
 };

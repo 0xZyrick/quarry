@@ -1,7 +1,6 @@
 "use client";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import type {Vault} from "@/lib/vault";
-import SoonChip from "../shared/SoonChip";
 import ReputationHeader from "./ReputationHeader";
 import MetricsPanel from "./MetricsPanel";
 import CapsuleCard from "./CapsuleCard";
@@ -49,21 +48,14 @@ export default function VaultPage({vault: v}: {vault: Vault}) {
             >
               ← Feed
             </a>
-            <a
-              href="/?view=map"
-              className="btn glass rounded-full px-3 py-1.5 font-mono text-xs text-neutral-300 hover:text-white"
-            >
-              Map
-            </a>
           </div>
-          <SoonChip>Wallet</SoonChip>
         </nav>
         {v.preview && (
           <div
             role="note"
             className="rounded-lg border border-line bg-[#12141a] px-3 py-1.5 font-mono text-[10px] text-neutral-500"
           >
-            Preview data · capsules sample until payment rails go live
+            Preview data · sample portfolio items
           </div>
         )}
         <ReputationHeader v={v} onSkill={show} />
@@ -73,7 +65,7 @@ export default function VaultPage({vault: v}: {vault: Vault}) {
             aria-label="Capsule archive filter"
             className="glass flex-1 min-w-[16rem] rounded-xl border border-line p-4 space-y-2 bg-[#12141a]/80"
           >
-            <div className="font-mono text-[10px] text-neutral-500">CAPSULE ARCHIVE</div>
+            <div className="font-mono text-[10px] text-neutral-500">PROJECT ARCHIVE</div>
             <div role="tablist" aria-label="Filter capsules" className="flex flex-wrap gap-2">
               {tab("all", "All")}
               {tab("war", "Projects")}

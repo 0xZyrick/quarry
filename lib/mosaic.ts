@@ -1,5 +1,5 @@
 // Tile data for the discovery mosaic. One tile per creator node. Status decides the kind of tile and the room it opens into:
-//   live -> LIVE (workspace stream), risk -> WAR ROOM (escrow room, tall), community -> COMMONS (shared canvas, landscape).
+//   live -> LIVE (workspace stream), risk -> WAR ROOM (project room, tall), community -> COMMONS (shared canvas, landscape).
 // Replace `tiles()` with a call to your feed endpoint; the rest of the UI only reads the Tile shape.
 import {NODES,MapNode,Status} from "./map";
 import {PainterId} from "./painters";

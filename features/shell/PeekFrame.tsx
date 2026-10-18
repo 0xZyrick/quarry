@@ -6,21 +6,15 @@ const clamp = (v: number) => Math.min(1, Math.max(0, v));
 /** Tiny board tilt near edges only — no nav hooks. */
 export default function PeekFrame({
   enabled,
-  onMap,
-  onWar,
   children,
 }: {
   enabled: boolean;
-  onMap: () => void;
-  onWar: () => void;
   children: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
   const sp = {stiffness: 180, damping: 28, mass: 0.45};
   const ry = useSpring(0, sp);
   const sx = useSpring(0, sp);
-  void onMap;
-  void onWar;
 
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!enabled || e.pointerType !== "mouse" || reduce) return;

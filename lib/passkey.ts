@@ -1,7 +1,7 @@
 // One-tap sign-in. Creates a platform passkey (FaceID / TouchID / Windows Hello) and derives the account id from it.
 // If the device cannot do WebAuthn (insecure origin, old browser), it falls back to a device-local account id.
-// NOTE: the challenge is generated in the browser, so this proves device presence only. Before real money moves, create the
-// challenge on the server, verify the attestation there, and issue a session. Account-abstraction wallet deploy hooks in after this call.
+// NOTE: the challenge is generated in the browser, so this proves device presence only. For production authentication,
+// create the challenge on the server, verify the attestation there, and issue a session.
 const b64=(b:ArrayBuffer)=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 export type Auth={uid:string;auth:"passkey"|"device"};
 export async function registerPasskey():Promise<Auth>{

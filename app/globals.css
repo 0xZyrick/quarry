@@ -1,78 +1,255 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@500&display=swap');
-@tailwind base;@tailwind components;@tailwind utilities;
-:root{--live:#00FF66;--risk:#FF6B00;--community:#00A3FF}
-html,body{height:100%;background:#0D0E11;color:#e8eaf0;font-family:Inter,sans-serif;overflow:hidden}
-.glass{background:rgba(22,25,32,.75);backdrop-filter:blur(12px);border:1px solid #242936}
-@media (prefers-reduced-transparency){.glass{background:#161920;backdrop-filter:none}}
-.snap-y-feed{scroll-snap-type:y mandatory;overflow-y:auto}
-.snap-item{scroll-snap-align:start;height:100%}
-@keyframes pulse-ring{0%{box-shadow:0 0 0 0 currentColor}100%{box-shadow:0 0 0 12px transparent}}
-.pulse{animation:pulse-ring 1.6s infinite}
-.btn{transition:background-color 60ms,color 60ms,border-color 60ms}
-/* feed: reels-style vertical snap, one clip per flick; horizontal intent goes to the shell gesture layer */
-.snap-y-feed{overscroll-behavior-y:contain;touch-action:pan-y}
-.snap-item{scroll-snap-stop:always}
-.peek-grid{background-image:linear-gradient(rgba(0,163,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(0,163,255,.22) 1px,transparent 1px);background-size:26px 26px}
-.frost-edge{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-@media (prefers-reduced-transparency){.frost-edge{backdrop-filter:none}}
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
-/* map pillars: monolith with a faceted cap, floating and pulsing; height is set per frame from altitude */
-.pillar{position:absolute;left:-6px;bottom:0;width:12px;height:var(--h,24px);padding:0;border:0;background:none;
-  filter:drop-shadow(0 0 5px var(--c));animation:pillar-float 3.2s ease-in-out infinite;touch-action:none}
-.pillar i{position:absolute;inset:0;display:block;clip-path:polygon(0 7px,50% 0,100% 7px,100% 100%,0 100%);
-  background:linear-gradient(to top,transparent,var(--c) 82%);opacity:.9;animation:pillar-pulse 2.4s ease-in-out infinite}
-.pillar-sel .pillar{filter:drop-shadow(0 0 12px var(--c)) brightness(1.5);width:14px;left:-7px}
-@keyframes pillar-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-@keyframes pillar-pulse{0%,100%{opacity:.7}50%{opacity:1}}
-@media (prefers-reduced-motion:reduce){.pillar,.pillar i{animation:none}}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* node shapes. Crystal = Commons: faceted gem, --g (0.8..1.7) is set per frame from cursor activity. */
-.pillar.crystal{width:calc(12px*var(--g,1));left:calc(-6px*var(--g,1));height:calc(var(--h,24px)*var(--g,1));
-  filter:drop-shadow(0 0 calc(3px + 9px*var(--act,0)) var(--c))}
-.pillar.crystal i{clip-path:polygon(50% 0,100% 24%,100% 76%,50% 100%,0 76%,0 24%);
-  background:linear-gradient(to top,var(--c),color-mix(in srgb,var(--c) 35%,#fff));opacity:.95}
-.pillar.crystal i.facet{background:rgba(0,10,20,.34);clip-path:polygon(50% 0,50% 100%,0 76%,0 24%);animation:none}
-.pillar-sel .pillar.crystal{width:calc(14px*var(--g,1));left:calc(-7px*var(--g,1));filter:drop-shadow(0 0 14px var(--c)) brightness(1.5)}
-/* Monolith = War Room: dark slab, flat faceted cap, laser above it. --pw (0..1) = escrow held, --ld = pulse period. */
-.pillar.monolith{width:14px;left:-7px}
-.pillar.monolith i{clip-path:polygon(0 5px,50% 0,100% 5px,100% 100%,0 100%);
-  background:linear-gradient(90deg,rgba(0,0,0,.35) 50%,transparent 50%),linear-gradient(to top,#3a1a00,var(--c) 85%)}
-.laser{position:absolute;left:50%;bottom:100%;margin-left:calc(-.75px - 1px*var(--pw,0));width:calc(1.5px + 2px*var(--pw,0));
-  height:calc(16px + 48px*var(--pw,0));transform-origin:bottom;pointer-events:none;
-  background:linear-gradient(to top,#fff,var(--c) 35%,transparent);box-shadow:0 0 calc(4px + 8px*var(--pw,0)) var(--c);
-  animation:laser var(--ld,2.6s) ease-in-out infinite}
-@keyframes laser{0%,100%{opacity:.25;transform:scaleY(.35)}50%{opacity:1;transform:scaleY(1)}}
-@media (prefers-reduced-motion:reduce){.laser{animation:none;opacity:.8}}
-/* hover-peek card, shown on hover (mouse) or keyboard focus. Flips left near the right edge (data-flip, set by the rig). */
-.peek{position:absolute;left:16px;top:12px;width:190px;opacity:0;visibility:hidden;transform:translateY(3px);pointer-events:none;
-  transition:opacity 120ms,transform 120ms,visibility 0s 120ms}
-.nodebox[data-flip="1"] .peek{left:auto;right:16px}
-.nodebox:focus-within{z-index:20}
-.nodebox:focus-within .peek{opacity:1;visibility:visible;transform:none;transition-delay:0s}
-@media (hover:hover){.nodebox:hover{z-index:20}.nodebox:hover .peek{opacity:1;visibility:visible;transform:none;transition-delay:0s}}
+/* -------------------------------------------------------------------------- */
+/* Wippo — dark canvas, warm accents (coral · cream · ink · soft green)         */
+/* -------------------------------------------------------------------------- */
+:root {
+  --coral: #ff765f;
+  --coral-soft: rgba(255, 118, 95, 0.16);
+  --cream: #f4f2ec;
+  --cream-dim: rgba(244, 242, 236, 0.8);
+  --ink: #080b11;
+  --growth: #9fe3c0;
+  --growth-soft: rgba(159, 227, 192, 0.16);
 
-/* accessibility: visible focus everywhere, calm motion, bigger pillar hit area */
-:focus-visible{outline:2px solid #00A3FF;outline-offset:2px}
-.pillar::after{content:"";position:absolute;inset:-8px -11px}
-@media (prefers-reduced-motion:reduce){.pulse{animation:none}*{scroll-behavior:auto!important}}
+  --page: #080b11;
+  --surface: #0e131c;
+  --surface-2: #141b26;
+  --surface-3: #1b2532;
+  --line: rgba(202, 220, 242, 0.09);
+  --line-strong: rgba(202, 220, 242, 0.15);
+  --text: #f4f2ec;
+  --text-muted: rgba(222, 228, 237, 0.64);
+  --text-faint: rgba(222, 228, 237, 0.38);
+  --live: var(--growth);
+  --risk: var(--coral);
+  --community: #a6b9ff;
+  --accent: var(--coral);
+}
 
-/* token landing: two rings expand from the node it dropped onto */
-.ripple{position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;border:2px solid var(--c);pointer-events:none;
-  animation:ripple .85s ease-out forwards}
-.ripple::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:1px solid var(--c);animation:ripple .85s .18s ease-out forwards;opacity:0}
-@keyframes ripple{0%{transform:scale(.3);opacity:1}100%{transform:scale(3.4);opacity:0}}
-@media (prefers-reduced-motion:reduce){.ripple,.ripple::after{animation:none;opacity:0}}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(ellipse at 50% -20%, rgba(67, 90, 132, 0.17), transparent 58%),
+    radial-gradient(ellipse at 100% 100%, rgba(255, 118, 95, 0.055), transparent 45%),
+    var(--page);
+  color: var(--text);
+  font-family: "Space Grotesk", Inter, system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
 
-/* PoE Vault: live beacon strip. Low-frequency pulse, off for reduced motion. */
-@keyframes beacon{0%,100%{box-shadow:0 0 0 0 rgba(0,255,102,0),inset 0 0 0 1px rgba(0,255,102,.25)}50%{box-shadow:0 0 26px 2px rgba(0,255,102,.35),inset 0 0 0 1px rgba(0,255,102,.75)}}
-.beacon-live{animation:beacon 2.6s ease-in-out infinite}
-@keyframes idle-beacon{0%,100%{opacity:.5}50%{opacity:.8}}
-.beacon-idle{animation:idle-beacon 4s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.beacon-live,.beacon-idle{animation:none}}
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 
+.glass {
+  background: rgba(14, 19, 28, 0.88);
+  border: 1px solid var(--line-strong);
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+}
 
-/* Scrollable regions keep overflow; chrome scrollbar is hidden */
-.no-scrollbar{scrollbar-width:none;-ms-overflow-style:none}
-.no-scrollbar::-webkit-scrollbar{display:none;width:0;height:0}
-*::-webkit-scrollbar{width:0;height:0}
-*{scrollbar-width:none;-ms-overflow-style:none}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+.btn {
+  transition: background-color 80ms ease, color 80ms ease, border-color 80ms ease,
+    opacity 80ms ease;
+}
+
+/* Explore mosaic — Pinterest-style masonry, up to 4 columns */
+.wippo-mosaic {
+  column-count: 2;
+  column-gap: 10px;
+}
+.wippo-mosaic > * {
+  break-inside: avoid;
+  margin-bottom: 10px;
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .wippo-mosaic {
+    column-count: 3;
+    column-gap: 12px;
+  }
+  .wippo-mosaic > * {
+    margin-bottom: 12px;
+  }
+}
+@media (min-width: 960px) {
+  .wippo-mosaic {
+    column-count: 4;
+    column-gap: 12px;
+  }
+}
+@media (min-width: 1400px) {
+  .wippo-mosaic {
+    column-count: 4;
+    column-gap: 14px;
+  }
+  .wippo-mosaic > * {
+    margin-bottom: 14px;
+  }
+}
+
+/* Skeleton pulse */
+@keyframes wippo-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.wippo-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 40%,
+    var(--surface-2) 80%
+  );
+  background-size: 200% 100%;
+  animation: wippo-shimmer 1.4s ease-in-out infinite;
+}
+
+.snap-y-feed {
+  scroll-snap-type: y mandatory;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+.snap-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  height: 100%;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+.pulse {
+  animation: pulse-ring 1.6s infinite;
+}
+
+@keyframes pillar-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes pillar-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.pillar {
+  position: absolute;
+  left: -6px;
+  bottom: 0;
+  width: 12px;
+  height: var(--h, 24px);
+  padding: 0;
+  border: 0;
+  background: none;
+  filter: drop-shadow(0 0 5px var(--c));
+  animation: pillar-float 3.2s ease-in-out infinite;
+  touch-action: none;
+}
+.pillar i {
+  position: absolute;
+  inset: 0;
+  display: block;
+  clip-path: polygon(0 7px, 50% 0, 100% 7px, 100% 100%, 0 100%);
+  background: linear-gradient(to top, transparent, var(--c) 82%);
+  opacity: 0.9;
+  animation: pillar-pulse 2.4s ease-in-out infinite;
+}
+.pillar-sel .pillar {
+  filter: drop-shadow(0 0 12px var(--c)) brightness(1.15);
+  width: 14px;
+  left: -7px;
+}
+
+.peek-grid {
+  background-image: linear-gradient(rgba(166, 185, 255, 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166, 185, 255, 0.075) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.frost-edge {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .frost-edge {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@layer utilities {
+  .bg-page {
+    background-color: var(--page);
+  }
+  .bg-surface {
+    background-color: var(--surface);
+  }
+  .bg-surface-2 {
+    background-color: var(--surface-2);
+  }
+  .bg-surface-3 {
+    background-color: var(--surface-3);
+  }
+  .border-line {
+    border-color: var(--line);
+  }
+  .text-live {
+    color: var(--live);
+  }
+  .text-risk {
+    color: var(--risk);
+  }
+  .text-community {
+    color: var(--community);
+  }
+  .bg-live {
+    background-color: var(--live);
+  }
+  .bg-risk {
+    background-color: var(--risk);
+  }
+  .bg-coral {
+    background-color: var(--coral);
+  }
+  .text-coral {
+    color: var(--coral);
+  }
+  .text-cream {
+    color: var(--cream);
+  }
+}

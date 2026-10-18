@@ -26,6 +26,7 @@ export async function POST(req:Request,{params}:{params:{room:string}}){
     case"say":{if(!a.caps.chat)return json({ok:false,reason:"quiet room"},403);const why=safety.screen(room,id,String(b.text??""));if(why)return json({ok:false,reason:why},why==="duplicate"?429:403);
       return json({ok:!!chat.say(room,id,name,String(b.text??""))},200,a.idt.setCookie)}
     case"requestMic":if(!a.caps.requestMic)return json({error:"forbidden"},403);chat.requestMic(room,id,name);return json({ok:true});
+    case"cancelMicRequest":if(!a.caps.requestMic)return json({error:"forbidden"},403);return json({ok:chat.cancelMicRequest(room,id,name)});
     case"passMic":{if(!a.caps.passMic)return json({error:"forbidden"},403);
       const uid=chat.passMic(room,String(b.target??""));if(!uid)return json({ok:false},409);
       await setPublish(room,uid,["microphone"]);return json({ok:true})}

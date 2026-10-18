@@ -13,7 +13,5 @@ export default function Guidelines(){
     <p className={p}>Anyone signed in can report a room or a person. A report is a signal, not a verdict. When enough trusted reports arrive, a room is held for a moderator, and a person can be muted until review. Accounts that file false reports lose influence.</p>
     <h2 className={h}>Strikes and appeals</h2>
     <p className={p}>A first upheld case hides the room for 24 hours, a second for 7 days, and a third restricts the account for 30 days. Serious violations lead to a permanent ban. You can appeal each case once, and a different moderator reviews it.</p>
-    <h2 className={h}>Money and fairness</h2>
-    <p className={p}>Milestone payments are released only by the paying client. If you dispute a milestone, release freezes until an arbiter decides.</p>
   </main>;
 }

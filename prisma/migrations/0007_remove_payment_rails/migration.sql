@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS "TransactionLedger";
+DROP TABLE IF EXISTS "Wallet";

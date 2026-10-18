@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/server/db";
 const VALID = new Set(["SUGGESTION", "CRITIQUE", "ENCOURAGEMENT"]);
 
 export async function POST(req: NextRequest) {
@@ -24,6 +23,26 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { id, isPinnedByHost, hostUserId } = body;
+  if (typeof body.markedHelpful === "boolean" && id) {
+    const contrib = await prisma.contribution.findUnique({
+      where: { id: String(id) },
+      include: { journeyNode: { include: { project: { select: { creatorId: true } } } } },
+    });
+    if (!contrib) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (hostUserId && contrib.journeyNode.project.creatorId !== hostUserId) {
+      return NextResponse.json({ error: "Only host can mark helpful" }, { status: 403 });
+    }
+    const updated = await prisma.contribution.update({
+      where: { id: String(id) },
+      data: {
+        markedHelpful: body.markedHelpful,
+        markedHelpfulAt: body.markedHelpful ? new Date() : null,
+      },
+      include: { user: { select: { id: true, handle: true } } },
+    });
+    return NextResponse.json({ contribution: updated });
+  }
+
   if (!id || typeof isPinnedByHost !== "boolean")
     return NextResponse.json({ error: "id and isPinnedByHost required" }, { status: 400 });
   const contrib = await prisma.contribution.findUnique({

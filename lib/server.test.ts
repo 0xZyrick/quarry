@@ -1,7 +1,6 @@
 // Run with: npx tsx lib/server.test.ts
-import {cookieFor,readSession,isArbiter} from "./server/session";
+import {cookieFor,readSession} from "./server/session";
 import {profileFor,goLive,snapshot,getRoom} from "./server/registry";
-import * as escrow from "./server/escrow";
 import * as chat from "./server/chat";
 import {kindIn,capsOf} from "./access";
 import {validInvite,cleanName,TEST_CODE} from "./server/invite";
@@ -20,26 +19,12 @@ eq(kindIn(fake,{id:"n1",ownerId:"n1",type:"war"}),"guest","claiming nothing gets
 eq(profileFor({uid:"u-creator",handle:"k",track:"creator"})!.creatorNodeId,"n1","creator owns n1");
 eq(getRoom("n1")!.type,"war","n1 is a war room");
 const own=profileFor({uid:"pk_newcreator1",handle:"n",track:"creator"})!;eq(own.creatorNodeId,"own:creator1","new creator gets an own: room");
-eq(isArbiter({uid:"u-arbiter",handle:"a",track:null}),true,"dev arbiter");
 // go-live gate
 eq(goLive("n6",{canvas:null,skill:null}),false,"no canvas, no skill: refused");
-// escrow
-let s=escrow.state("n1","party");eq(s.milestones.find(m=>m.status==="active")?.id,"m3","m3 active");
-eq(escrow.state("n0","party").milestones.length,0,"commons has no contract");
-eq((escrow.openDispute("n1","client","not as briefed") as any).ok,true,"dispute opens");
-eq((escrow.release("n1","m3") as any).code,409,"release frozen while disputed");
-eq((escrow.openDispute("n1","client","again") as any).code,409,"one open dispute at a time");
-eq(escrow.state("n1","public").dispute?.reason,undefined,"guests do not see the reason");
-eq(escrow.state("n1","party").dispute?.reason,"not as briefed","parties do");
-eq((escrow.respond("n1","delivered on spec") as any).ok,true,"creator responds");eq((escrow.respond("n1","x") as any).code,409,"only once");
-eq((escrow.resolve("n1","release") as any).ok,true,"arbiter releases");
-s=escrow.state("n1","party");eq([s.milestones[2].status,s.milestones[3].status,s.dispute?.outcome],["done","active","release"],"m3 paid, m4 active");
-eq((escrow.release("n1","m3") as any).code,409,"double release refused");
-eq((escrow.release("n1","m4") as any).ok,true,"normal release works");
 // chat
 const got:string[]=[];const off=chat.subscribe("t1",(e,d:any)=>got.push(e+":"+(d.text??"")));
 chat.say("t1","u1","ann","hello");eq(chat.say("t1","u1","ann","spam")===null,true,"rate limited");
-chat.system("t1","@ann tipped $5!");chat.requestMic("t1","u1","ann");
+chat.system("t1","the stream started");chat.requestMic("t1","u1","ann");
 eq(chat.passMic("t1","ann"),"u1","pass mic returns the uid");eq(chat.hasSlot("t1","u1"),true,"slot held");
 chat.passMic("t1","ghost");eq(chat.passMic("t1","ghost"),null,"unknown handle refused");
 eq(got.filter(x=>x.startsWith("msg")).length>=3,true,"subscribers receive lines");off();

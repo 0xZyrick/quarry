@@ -1,86 +1,46 @@
 "use client";
+import { useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import CirclesHome from "../circles/CirclesHome";
+import ExploreHome from "../explore/ExploreHome";
+import { useShellUi } from "@/lib/shellUi";
+
+type View = "stories" | "circles";
+
 /**
- * Discovery — Experience C continuous surface
- * Mosaic (Discover) · Network (Connect / Return) · Room Map (legacy)
- * One continuous experience, not three separate apps.
+ * Discovery router.
+ * Circles → operational catch-up (Milestone episodes).
+ * Stories → explore / narrative mosaic.
  */
-import { useState } from "react";
-import Feed from "../feed/Feed";
-import Mosaic from "./Mosaic";
-import NarrativeMosaic from "../project/NarrativeMosaic";
-import NetworkLayer from "../project/NetworkLayer";
-import CreateProjectSheet from "../project/CreateProjectSheet";
+export default function Discovery() {
+  const activeTab = useShellUi((state) => state.activeTab);
+  const view: View = activeTab === "explore" ? "stories" : "circles";
 
-type View = "stories" | "network" | "rooms" | "reels";
-
-export default function Discovery({ playing }: { playing: boolean }) {
-  const [view, setView] = useState<View>("stories");
-  const [createOpen, setCreateOpen] = useState(false);
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const d = (e as CustomEvent).detail as string;
+      if (d === "circles" || d === "network") {
+        useShellUi.getState().setActiveTab("circles");
+      } else if (d === "home" || d === "stories") {
+        useShellUi.getState().setActiveTab("explore");
+      }
+    };
+    window.addEventListener("wippo:nav", onNav);
+    return () => window.removeEventListener("wippo:nav", onNav);
+  }, []);
 
   return (
-    <>
-      {view === "stories" && (
-        <>
-          <NarrativeMosaic playing={playing} />
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 flex-wrap justify-center px-2">
-            <button
-              onClick={() => setView("network")}
-              className="glass btn rounded-full px-3 py-1 font-mono text-[11px] text-live hover:text-white"
-            >
-              Following
-            </button>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="glass btn rounded-full px-3 py-1 font-mono text-[11px] text-neutral-300 hover:text-white"
-            >
-              + Project
-            </button>
-            <button
-              onClick={() => setView("rooms")}
-              className="glass btn rounded-full px-3 py-1 font-mono text-[11px] text-neutral-400 hover:text-white"
-            >
-              Room Map
-            </button>
-          </div>
-        </>
-      )}
-
-      {view === "network" && (
-        <NetworkLayer onBack={() => setView("stories")} />
-      )}
-
-      {view === "rooms" && (
-        <>
-          <Mosaic playing={playing} onReels={() => setView("reels")} />
-          <button
-            onClick={() => setView("stories")}
-            className="glass btn absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full px-3 py-1 font-mono text-[11px] text-live hover:text-white"
-          >
-            ← Story Mosaic
-          </button>
-        </>
-      )}
-
-      {view === "reels" && (
-        <>
-          <Feed playing={playing} />
-          <button
-            onClick={() => setView("stories")}
-            className="glass btn absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full px-3 py-1 font-mono text-[11px] text-neutral-200 hover:text-white"
-          >
-            Story Mosaic
-          </button>
-        </>
-      )}
-
-      <CreateProjectSheet
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => {
-          setCreateOpen(false);
-          // stay on stories; mosaic will refresh on next poll
-        }}
-      />
-    </>
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={view}
+        initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+        className="h-full w-full overflow-hidden"
+      >
+        {view === "circles" ? <CirclesHome /> : <ExploreHome />}
+      </motion.div>
+    </AnimatePresence>
   );
 }
