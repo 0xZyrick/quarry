@@ -24,8 +24,7 @@ type Api = {
   data: Onboarding;
   ready: boolean;
   complete: boolean;
-  /** App chrome is usable (explored guest or signed in) */
-  active: boolean;
+    active: boolean;
   signedIn: boolean;
   update: (p: Partial<Onboarding>) => void;
   requireAuth: (reason: string, onContinue?: () => void) => void;
@@ -40,10 +39,6 @@ export function useOnboarding() {
   return c;
 }
 
-/**
- * Welcome → look around (guest) or Explore (sign in).
- * requireAuth opens branded AuthModal (Drop in, Profile, etc.).
- */
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<Onboarding>(EMPTY);
   const [ready, setReady] = useState(false);

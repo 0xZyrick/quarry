@@ -3,14 +3,6 @@ import { motion } from "framer-motion";
 import { useOnboarding } from "./OnboardingProvider";
 import { useShellUi } from "@/lib/shellUi";
 
-/**
- * Welcome — split-ish layout:
- * left/top: large brand mark + tagline
- * right/bottom: existing copy + Explore / look around
- *
- * Explore → sign-in if not logged in
- * look around → guest browse (restricted actions later)
- */
 export default function WelcomeStep() {
   const { update, signedIn } = useOnboarding() as any;
 
@@ -19,7 +11,6 @@ export default function WelcomeStep() {
       update({ explored: true } as any);
       return;
     }
-    // Need sign-in
     try {
       useShellUi.getState().openAuth?.();
     } catch {}

@@ -13,12 +13,6 @@ type Props = {
 type Mode = "join" | "signin" | "link";
 type JoinStep = "email" | "handle";
 
-const PREVIEW_IMAGES = [
-  "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&q=80",
-  "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&q=80",
-  "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=500&q=80",
-];
-
 export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
   const { update, data } = useOnboarding();
   const [mode, setMode] = useState<Mode>("join");
@@ -141,7 +135,7 @@ export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
                   ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}. Sign in or create an account to continue.`
                   : mode === "join"
                     ? joinStep === "email"
-                      ? "Enter your email to create an account. No invite is needed to join Wippo."
+                      ? "Enter your email to create your account."
                       : `We'll send a verification code to ${email}.`
                     : mode === "link"
                       ? "Verify an email address to make this account recoverable after sign-out."
@@ -281,33 +275,37 @@ export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
           </div>
         </section>
 
-        <aside className="relative hidden min-h-full overflow-hidden border-l border-white/10 bg-[#10141b] p-8 lg:flex lg:flex-col lg:justify-between">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_45%_40%,rgba(255,118,95,.14),transparent_60%)]" />
-          <div className="relative z-10">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-              The work is the story
-            </p>
-            <h2 className="mt-4 max-w-lg text-[38px] font-semibold leading-[1.05] tracking-tight">
-              A live atlas of work in progress.
+        <aside className="relative hidden min-h-full overflow-hidden border-l border-white/10 bg-[#0a0d12] lg:flex lg:flex-col">
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse at 50% 42%, rgba(255,118,95,0.12), transparent 62%), radial-gradient(ellipse at 80% 80%, rgba(16,185,129,0.06), transparent 50%)",
+            }}
+          />
+          <div
+            className="absolute inset-0 opacity-[0.35]"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)",
+              backgroundSize: "18px 18px",
+            }}
+          />
+          <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-12 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/wippo-icon.png"
+              alt=""
+              className="h-14 w-14 object-contain opacity-90"
+              draggable={false}
+            />
+            <h2 className="mt-10 max-w-xs text-[32px] font-semibold leading-[1.12] tracking-tight text-white">
+              Build in public.
             </h2>
-            <p className="mt-4 max-w-md text-[14px] leading-relaxed text-white/55">
-              Follow work as it happens. Watch makers build, see what gets stuck, and find a place to help.
+            <p className="mt-4 max-w-[220px] text-[14px] leading-relaxed text-white/45">
+              A live place for work in progress.
             </p>
           </div>
-          <div className="relative z-10 grid h-[52vh] max-h-[560px] min-h-[360px] grid-cols-2 grid-rows-2 gap-2 overflow-hidden rounded-2xl border border-white/10 p-2">
-            {PREVIEW_IMAGES.map((src, index) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={src}
-                src={src}
-                alt=""
-                className={`h-full w-full rounded-xl object-cover ${index === 0 ? "row-span-2" : ""}`}
-              />
-            ))}
-          </div>
-          <p className="relative z-10 text-[11px] text-white/40">
-            Discover is public · Studio publishing requires a creator code
-          </p>
         </aside>
       </div>
     </div>

@@ -116,7 +116,6 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
       zone: primaryZone || data.zone,
       ...partial,
     } as any);
-    // Persist interests + gender to profile when signed in
     const uid = data.uid || currentUid();
     if (uid) {
       fetch("/api/profile", {
@@ -126,7 +125,6 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
           userId: uid,
           handle: data.name,
           gender: gender || undefined,
-          // interests stored via tags client-side; profile API can ignore unknown
         }),
       }).catch(() => {});
     }

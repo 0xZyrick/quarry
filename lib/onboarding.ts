@@ -1,8 +1,4 @@
-/**
- * Wippo onboarding record (local).
- * Guest can explore without full profile; Drop in requires uid + name.
- * Legacy CREATOR_TAGS / CLIENT_TAGS kept for /api/hubs and older steps.
- */
+/** Local onboarding record. Guest explore allowed; full actions need uid + name. */
 import { ZONES } from "./map";
 
 export type Gender = "male" | "female";
