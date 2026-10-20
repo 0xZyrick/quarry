@@ -25,6 +25,7 @@ import {useOnboarding} from "@/features/onboarding/OnboardingProvider";
 import ProjectWorkspace from "../project/ProjectWorkspace";
 import {navigateToRoute, routeFromPath} from "@/lib/appRoutes";
 import LoadingWorld from "../shared/LoadingWorld";
+import CommandPalette from "./CommandPalette";
 
 const SPRING = {type: "spring" as const, stiffness: 300, damping: 30};
 type G = {
@@ -52,6 +53,13 @@ export default function SpatialShell() {
   const {layer, setLayer, load, room, setRoom, roomId, trans} = useGuild();
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountError, setAccountError] = useState("");
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [liveMenuOpen, setLiveMenuOpen] = useState(false);
+  const [studioCode, setStudioCode] = useState("");
+  const [studioCodeError, setStudioCodeError] = useState("");
+  const [studioCodeBusy, setStudioCodeBusy] = useState(false);
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [liveClock, setLiveClock] = useState("00:00");
   const [size, setSize] = useState({w: 390});
   const [viewportReady, setViewportReady] = useState(false);
   const [routeReady, setRouteReady] = useState(false);
@@ -68,8 +76,53 @@ export default function SpatialShell() {
   const routeLoadingTimer = useRef<number | null>(null);
   const sec = useRoomSecurity();
   const profileReady = useGuild((s) => s.profileReady);
+  const studioUnlocked = useGuild((s) => !!s.profile?.studioUnlocked);
   const gr = useHubs((s) => !!s.greenroom[roomId]);
   const views = viewsFor(sec.room.type, gr);
+
+  // Live session clock when inside a room table
+  useEffect(() => {
+    if (layer === 2) {
+      setSessionStartedAt((prev) => prev ?? Date.now());
+    } else {
+      setSessionStartedAt(null);
+      setLiveMenuOpen(false);
+    }
+  }, [layer, roomId]);
+
+  useEffect(() => {
+    if (sessionStartedAt == null) {
+      setLiveClock("00:00");
+      return;
+    }
+    const tick = () => {
+      const sec = Math.max(0, Math.floor((Date.now() - sessionStartedAt) / 1000));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      setLiveClock(
+        h > 0
+          ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+          : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [sessionStartedAt]);
+
+  // Cmd/Ctrl+K command palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCmdOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
 
   const run = useCallback((l: Layer, inst: boolean) => {
     const w = sz.current.w;
@@ -141,7 +194,7 @@ export default function SpatialShell() {
       }
 
       let route = routeFromPath(window.location.pathname);
-      if (window.location.pathname === "/" && route.kind === "studio") {
+      if (window.location.pathname === "/" && route.kind !== "discover") {
         const legacyLink = readLink();
         if (legacyLink) route = {kind: "room", id: legacyLink.roomId};
       }
@@ -200,7 +253,7 @@ export default function SpatialShell() {
   useEffect(() => {
     const f = () => useHubs.getState().sync();
     f();
-    const t = setInterval(f, 3000);
+    const t = setInterval(f, 12000);
     return () => clearInterval(t);
   }, []);
 
@@ -234,6 +287,29 @@ export default function SpatialShell() {
     const t = clampLayer(n);
     if (t === layer) run(t, false);
     else setLayer(t);
+  };
+
+  const unlockStudio = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setStudioCodeBusy(true);
+    setStudioCodeError("");
+    try {
+      const response = await fetch("/api/studio/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: studioCode }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not unlock Studio.");
+      useGuild.setState((state) => ({
+        profile: state.profile ? { ...state.profile, studioUnlocked: true } : state.profile,
+      }));
+      setStudioCode("");
+    } catch (error) {
+      setStudioCodeError(error instanceof Error ? error.message : "Could not unlock Studio.");
+    } finally {
+      setStudioCodeBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -347,85 +423,150 @@ export default function SpatialShell() {
       onPointerUp={undefined}
       onPointerCancel={undefined}
     >
-      {/* Top bar — fixed height in flow; content is always below */}
-      <header className="shrink-0 z-40 w-full border-b border-white/[0.06] bg-[#090c12]/85 backdrop-blur-xl">
-        <div className="w-full h-14 sm:h-16 px-2 sm:px-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-2">
-          {/* Left: logo only */}
-          <div className="flex items-center min-w-0 justify-start">
+      {/* Global nav — identity · search · modes · live · profile */}
+      <header className="shrink-0 z-40 w-full border-b border-white/[0.05] bg-[#0B0C0E]/95 backdrop-blur-xl">
+        <div className="w-full h-14 sm:h-[3.75rem] px-2 sm:px-4 lg:px-5 flex items-center gap-2 sm:gap-3">
+          {/* Left: logo + command bar */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => {
-                navigateToRoute({kind: "studio"});
+                if (layer === 2) go(0);
+                navigateToRoute({ kind: "discover" });
               }}
-              className="shrink-0"
+              className="shrink-0 flex items-center gap-2.5 sm:gap-3"
               aria-label="Wippo home"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <span className="relative block h-7 w-[4.5rem] sm:h-8 sm:w-[5.25rem] lg:h-9 lg:w-24">
-                <img
-                  src="/brand/wippo-logo.png"
-                  alt="Wippo"
-                  className="h-full w-full object-contain"
-                />
+              <img
+                src="/brand/wippo-icon.png"
+                alt=""
+                className="h-8 w-8 sm:h-9 sm:w-9 object-contain shrink-0"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/wippo-logo.png"
+                alt="Wippo"
+                className="h-7 sm:h-8 w-auto max-w-[9.5rem] sm:max-w-[11rem] object-contain object-left"
+              />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              className="hidden md:flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-left hover:bg-white/[0.05] transition"
+            >
+              <span className="text-white/35 text-[13px]">⌕</span>
+              <span className="truncate text-[12px] text-white/40">
+                Search canvases, goals, or builders…
               </span>
+              <kbd className="ml-auto shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-white/30">
+                ⌘K
+              </kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              className="md:hidden rounded-full w-9 h-9 grid place-items-center border border-white/[0.07] text-white/55"
+              aria-label="Search"
+            >
+              ⌕
             </button>
           </div>
 
-          {/* Center: Circle / Explore */}
-          <div className="flex items-center justify-center">
-            {layer === 0 ? (
-              <nav className="flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-full border border-white/[0.08] bg-[#111720]/80 shadow-[0_8px_32px_rgba(0,0,0,.2)]" aria-label="Primary">
-                <TopTab
-                  id="circles"
-                  label="Studio"
-                  onClick={() => navigateToRoute({kind: "studio"})}
-                />
-                <TopTab
-                  id="explore"
-                  label="Discover"
-                  onClick={() => navigateToRoute({kind: "discover"})}
-                />
-              </nav>
-            ) : (
+          {/* Center: Discover / Studio */}
+          <nav
+            className="hidden sm:flex items-center gap-0.5 p-0.5 rounded-full border border-white/[0.08] bg-[#111318]/90"
+            aria-label="Primary"
+          >
+            {layer === 2 ? (
               <button
                 type="button"
                 onClick={() => go(0)}
-                className="rounded-full px-3 py-1.5 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"
+                className="rounded-full px-3 py-1.5 text-[12px] text-white/60 hover:text-white"
               >
-                ← Studio
+                ← Back
               </button>
+            ) : (
+              <>
+                <TopTab
+                  id="explore"
+                  label="Discover"
+                  onClick={() => navigateToRoute({ kind: "discover" })}
+                />
+                <TopTab
+                  id="circles"
+                  label="Studio"
+                  onClick={() => navigateToRoute({ kind: "studio" })}
+                />
+              </>
             )}
-          </div>
+          </nav>
 
-          {/* Right: Create · Inbox · Profile */}
-          <div className="flex items-center gap-1.5 sm:gap-2 justify-end min-w-0">
-            {layer === 0 && signedIn && (
-              <button
-                type="button"
-                onClick={() => useShellUi.getState().openLaunch()}
-                aria-label="Start a project"
-                className="rounded-full min-w-8 px-2 sm:px-3.5 py-2 text-[11px] font-semibold bg-[var(--coral)] text-white shadow-[0_0_24px_rgba(255,92,53,.2)] hover:brightness-110"
-              >
-                <span className="sm:hidden">+</span>
-                <span className="hidden sm:inline">+ Start a project</span>
-              </button>
-            )}
+          {/* Right: live pill · inbox · profile */}
+          <div className="flex items-center gap-1.5 sm:gap-2 justify-end shrink-0">
             {layer === 2 && (
-              <div className="flex text-[11px] font-medium p-0.5 rounded-full border border-[var(--line)] shrink-0">
-                <span className="px-2.5 py-1 rounded-full bg-[var(--coral)] text-white">Workspace</span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setLiveMenuOpen((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-full bg-[#10B981]/15 ring-1 ring-[#10B981]/40 px-2.5 py-1.5 text-[11px] font-semibold text-[#6ee7b7] hover:bg-[#10B981]/25"
+                  aria-expanded={liveMenuOpen}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                  <span className="hidden xs:inline sm:inline">LIVE</span>
+                  <span className="tabular-nums">{liveClock}</span>
+                </button>
+                {liveMenuOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-48 rounded-2xl border border-white/10 bg-[#12151a]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+                    <button
+                      type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/80 hover:bg-white/[0.06]"
+                      onClick={() => {
+                        setLiveMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent("wippo:room-mute"));
+                      }}
+                    >
+                      Mute / unmute
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/80 hover:bg-white/[0.06]"
+                      onClick={() => {
+                        setLiveMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent("wippo:room-canvas"));
+                      }}
+                    >
+                      Change canvas
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-red-300 hover:bg-white/[0.06]"
+                      onClick={() => {
+                        setLiveMenuOpen(false);
+                        go(0);
+                        navigateToRoute({ kind: "discover" });
+                      }}
+                    >
+                      End session
+                    </button>
+                  </div>
+                )}
               </div>
             )}
+
             <button
               type="button"
               aria-label="Inbox"
               onClick={() => useShellUi.getState().openInbox()}
-              className="rounded-full w-9 h-9 grid place-items-center border border-white/[0.07] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-white/5"
+              className="rounded-full w-9 h-9 grid place-items-center border border-white/[0.07] text-white/55 hover:text-white hover:bg-white/5"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M4 6h16v12H4z" />
                 <path d="m4 8 8 6 8-6" />
               </svg>
             </button>
+
             {signedIn ? (
               <div className="relative">
                 <button
@@ -433,92 +574,79 @@ export default function SpatialShell() {
                   aria-label="Account menu"
                   aria-expanded={accountOpen}
                   onClick={() => setAccountOpen((open) => !open)}
-                  className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.04] pl-1 pr-3 py-1 text-[11px] font-medium text-[var(--text)] hover:bg-white/[0.08]"
+                  className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.04] pl-1 pr-2 sm:pr-3 py-1 text-[11px] font-medium text-white hover:bg-white/[0.08]"
                 >
                   <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--coral)]/20 text-[var(--coral)] font-bold">
                     {(account.name || "W").replace(/^@/, "").slice(0, 1).toUpperCase()}
                   </span>
-                  <span className="hidden sm:inline max-w-24 truncate">@{account.name?.replace(/^@/, "")}</span>
+                  <span className="hidden sm:inline max-w-24 truncate">
+                    @{(account.name || "").replace(/^@/, "")}
+                  </span>
                 </button>
                 {accountOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-52 rounded-2xl border border-white/10 bg-[#111720]/95 p-2 shadow-2xl backdrop-blur-xl">
+                  <div className="absolute right-0 top-11 z-50 w-52 rounded-2xl border border-white/10 bg-[#12151a]/95 p-2 shadow-2xl backdrop-blur-xl">
                     <p className="px-3 py-2 text-[11px] text-white/45">Signed in as</p>
-                    <p className="px-3 pb-2 text-[13px] font-semibold text-white truncate">@{account.name?.replace(/^@/, "")}</p>
-                    <p className="px-3 pb-2 text-[10px] uppercase tracking-[0.12em] text-[var(--growth)]">
-                      {account.track === "client" ? "Project owner mode" : account.track === "creator" ? "Creator mode" : "Choose a work mode"}
+                    <p className="px-3 pb-2 text-[13px] font-semibold text-white truncate">
+                      @{(account.name || "").replace(/^@/, "")}
                     </p>
                     <button
                       type="button"
-                      onClick={async () => {
-                        const nextTrack = account.track === "client" ? "creator" : "client";
-                        setAccountError("");
-                        try {
-                          const response = await fetch("/api/session", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ uid: account.uid, track: nextTrack }),
-                          });
-                          const result = await response.json().catch(() => ({}));
-                          if (!response.ok) throw new Error(result.error || "Could not switch role.");
-                          update({ track: nextTrack });
-                        } catch (error) {
-                          setAccountError(error instanceof Error ? error.message : "Could not switch role.");
-                        }
-                      }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[11px] text-white/65 hover:bg-white/[0.06] hover:text-white"
-                    >
-                      Switch to {account.track === "creator" ? "Project owner" : "Creator"} mode
-                    </button>
-                    <button
-                      type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/80 hover:bg-white/[0.06]"
                       onClick={() => {
-                        window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "link email sign-in" }));
                         setAccountOpen(false);
+                        const handle = String(account.name || "")
+                          .replace(/^@/, "")
+                          .toLowerCase();
+                        if (handle) navigateToRoute({ kind: "profile", handle });
                       }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[11px] text-white/65 hover:bg-white/[0.06] hover:text-white"
                     >
-                      Add or change sign-in email
+                      Profile
                     </button>
                     <button
                       type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/80 hover:bg-white/[0.06]"
                       onClick={() => {
-                        const handle = String(account.name || "").replace(/^@/, "").toLowerCase().replace(/[^a-z0-9._-]/g, "");
-                        useShellUi.getState().openVault(handle || "me");
                         setAccountOpen(false);
+                        navigateToRoute({ kind: "studio" });
                       }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/75 hover:bg-white/[0.06]"
                     >
-                      Open your project archive
+                      Studio
                     </button>
                     <button
                       type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-red-300 hover:bg-white/[0.06]"
                       onClick={() => {
-                        setAccountError("");
-                        clearAuth().then(() => setAccountOpen(false)).catch((error) => {
-                          setAccountError(error instanceof Error ? error.message : "Could not sign out.");
-                        });
+                        setAccountOpen(false);
+                        clearAuth();
                       }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/50 hover:bg-white/[0.06] hover:text-white"
                     >
                       Sign out
                     </button>
-                    {accountError && <p role="alert" className="px-3 py-1 text-[10px] text-[var(--coral)]">{accountError}</p>}
+                    {accountError && (
+                      <p role="alert" className="px-3 py-1 text-[10px] text-[var(--coral)]">
+                        {accountError}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
             ) : (
               <button
                 type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "sign in" }))}
-                className="rounded-full border border-white/10 px-3.5 py-2 text-[11px] font-semibold text-white/75 hover:border-white/20 hover:text-white"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent("wippo:auth", { detail: "sign in" })
+                  )
+                }
+                className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/[0.06]"
               >
-                <span className="sm:hidden">Join</span>
-                <span className="hidden sm:inline">Join / sign in</span>
+                Sign in
               </button>
             )}
           </div>
         </div>
       </header>
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       {/* Content sits BELOW header — full remaining viewport */}
       <div className="relative flex-1 min-h-0 w-full overflow-hidden">

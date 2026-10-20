@@ -32,12 +32,17 @@ function decodeSegment(value: string): string | null {
   }
 }
 
+/** Public default is Discover — proof of work without auth. */
 export function routeFromPath(pathname: string): AppRoute {
   const parts = pathname.split("/").filter(Boolean);
-  if (parts.length === 0 || parts[0] === "studio") return { kind: "studio" };
+  if (parts.length === 0) return { kind: "discover" };
   if (parts[0] === "discover") return { kind: "discover" };
+  if (parts[0] === "studio") return { kind: "studio" };
   if (parts[0] === "room") {
-    return { kind: "room", id: parts[1] ? decodeSegment(parts[1]) || "n0" : "n0" };
+    return {
+      kind: "room",
+      id: parts[1] ? decodeSegment(parts[1]) || "n0" : "n0",
+    };
   }
   if (parts[0] === "project" && parts[1]) {
     return { kind: "project", id: decodeSegment(parts[1]) || "" };
@@ -46,7 +51,7 @@ export function routeFromPath(pathname: string): AppRoute {
     const value = decodeSegment(parts[0] === "u" ? parts[1] : parts[0]);
     if (value) return { kind: "profile", handle: value.replace(/^@/, "") };
   }
-  return { kind: "studio" };
+  return { kind: "discover" };
 }
 
 export function navigateToRoute(route: AppRoute, replace = false) {
@@ -56,7 +61,7 @@ export function navigateToRoute(route: AppRoute, replace = false) {
   window.dispatchEvent(new Event("wippo:routechange"));
 }
 
-export function returnFromRoute(fallback: AppRoute = { kind: "studio" }) {
+export function returnFromRoute(fallback: AppRoute = { kind: "discover" }) {
   if (typeof window === "undefined") return;
   if (window.history.state?.wippoRoute && window.history.length > 1) {
     window.history.back();

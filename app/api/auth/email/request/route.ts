@@ -1,8 +1,9 @@
 import { emailAuthClient, hasEmailAuthConfig, normalizeEmail } from "@/lib/server/emailAuth";
 import { json, sameOrigin } from "@/lib/server/authz";
 import { limit, ipOf } from "@/lib/server/ratelimit";
-import { prisma } from "@/lib/server/db";
+import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient();
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -10,8 +11,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const email = normalizeEmail(body.email);
   if (!email) return json({ error: "Enter a valid email address." }, 400);
-  if (!limit(`signin:${ipOf(req)}`, 8, 60 * 60_000) ||
-      !limit(`signin-email:${email}`, 5, 60 * 60_000)) {
+  if (!(await limit(`signin:${ipOf(req)}`, 8, 60 * 60_000)) ||
+      !(await limit(`signin-email:${email}`, 5, 60 * 60_000))) {
     return json({ error: "Too many codes requested. Try again later." }, 429);
   }
 

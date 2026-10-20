@@ -6,7 +6,7 @@ import AnalyticsProvider from "@/features/analytics/AnalyticsProvider";
 export const metadata: Metadata = {
   title: "Wippo",
   description: "Follow what people are building",
-  icons: { icon: "/brand/wippo-logo.png", apple: "/brand/wippo-logo.png" },
+  icons: { icon: "/brand/wippo-icon.png", apple: "/brand/wippo-icon.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

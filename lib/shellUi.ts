@@ -33,7 +33,7 @@ export const useShellUi = create<S>((set) => ({
   inboxOpen: false,
   hideMainNav: false,
   routeProjectId: null,
-  activeTab: "circles",
+  activeTab: "explore",
   openVault: (handle) => {
     set({ vaultHandle: handle, routeProjectId: null });
     navigateToRoute({ kind: "profile", handle });

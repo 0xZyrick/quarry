@@ -20,11 +20,11 @@ function demoCapsules(nodeId:string,war:boolean,special:boolean):Capsule[]{
       createdAt:BASE-Math.floor(hash(id+"a")*330)*864e5,
       proofHash:hex(id+"h"),peerMarks:Math.floor(hash(id+"m")*13),painter:pick(PAINTERS,id+"c"),seed:Math.floor(hash(id+"z")*1e6),clipUrl:BROADCAST_SRC})}
   return out}
-export function vaultFor(handle:string,session:Session|null):Vault|null{
+export async function vaultFor(handle:string,session:Session|null):Promise<Vault|null>{
   const mine=handle==="me"||(!!session&&handle===session.handle),n=NODES.find(x=>x.name===handle);
   if(n){const war=shapeOf(n)==="monolith",mira=n.id==="n0"; // the spec example: one creator with both a War Room history and Commons builds
     const cs=mira?[...demoCapsules(n.id,true,true),...demoCapsules("n0c",false,true).map(c=>({...c,roomId:n.id}))]:demoCapsules(n.id,war,false);
-    const h=hubOf(n.id),room=getRoom(n.id),g=h?.gate;
+    const h=await hubOf(n.id),room=await getRoom(n.id),g=h?.gate;
     return{handle:n.name,location:`${zoneOf(n).name.replace(" Craft Zone"," Node")}, ${n.city}`,tier:tierOf(metricsOf(cs)),metrics:metricsOf(cs),skills:skillsOf(cs),capsules:cs.sort((a,b)=>b.createdAt-a.createdAt),
       preview:true,nodeId:n.id,live:h?.live&&!h.suspended?{nodeId:n.id,kind:room?.type??"commons",roomNumber:100+Math.floor(hash(n.id+"rn")*900),label:g?.canvas??g?.skill??"Live session"}:null}}
   if(mine&&session)return{handle:session.handle,location:null,tier:"rising",metrics:metricsOf([]),skills:[],capsules:[],preview:false,nodeId:null,live:null}; // earned, never granted

@@ -137,8 +137,8 @@ export default function CirclesHome() {
   };
 
   const claimHelp = async (h: HelpRow) => {
-    if (!signedIn) {
-      requireAuth("offer to help on a project");
+    if (!currentUid()) {
+      requireAuth("offer to help on a project", () => void claimHelp(h));
       return;
     }
     const uid = currentUid();
@@ -168,156 +168,193 @@ export default function CirclesHome() {
   };
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-[var(--page)]">
-      <div className="h-full max-w-[1600px] mx-auto flex flex-col">
-        <main className="flex-1 min-h-0 min-w-0 overflow-y-auto px-4 sm:px-8 py-5">
-          <div className="max-w-6xl mx-auto space-y-8 sm:space-y-10">
-            <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 border-b border-[var(--line)] pb-5 sm:pb-6">
-              <div className="max-w-2xl">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--coral)]">Your workbench</p>
-                <h1 className="mt-2 text-[28px] sm:text-[36px] font-semibold tracking-tight text-[var(--text)]">Studio</h1>
-                <p className="mt-2 text-[13px] sm:text-[14px] leading-relaxed text-[var(--text-muted)]">
-                  Pick up where your circle left off, join a work session, or step into a project that needs a hand.
+    <div className="absolute inset-0 overflow-hidden bg-[#0B0C0E]">
+      <div className="h-full max-w-[1600px] mx-auto flex flex-col px-3 sm:px-5 py-3 gap-3">
+        {(feedError || actionError) && (
+          <p role="alert" className="text-[12px] text-red-300 shrink-0">{actionError || feedError}</p>
+        )}
+
+        {/* Split: launchpad 65% · network pulse 35% */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-3">
+          {/* LEFT — Quick launchpad */}
+          <section className="min-h-0 flex flex-col rounded-2xl border border-white/[0.06] bg-[#111318] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between gap-2">
+              <h1 className="text-[14px] font-semibold text-white">Your quick launchpad</h1>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!signedIn) {
+                    requireAuth("start a live canvas session");
+                    return;
+                  }
+                  useShellUi.getState().openLaunch();
+                }}
+                className="rounded-full bg-[#10B981] px-3 py-1.5 text-[11px] font-semibold text-[#04120c] hover:brightness-110"
+              >
+                ● Go live
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+              <div className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-white/35">Session context</p>
+                <p className="text-[13px] text-white/70">
+                  Pick a project, set 1–2 micro-goals, then start screen share into your table.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
-                    useShellUi.getState().setActiveTab("explore");
-                    window.dispatchEvent(new CustomEvent("wippo:nav", { detail: "stories" }));
+                    if (!signedIn) {
+                      requireAuth("start a session");
+                      return;
+                    }
+                    useShellUi.getState().openLaunch();
                   }}
-                  className="rounded-full border border-[var(--line-strong)] px-4 py-2 text-[12px] font-medium text-[var(--text)] hover:bg-white/[0.05]"
+                  className="w-full rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-6 text-center hover:bg-white/[0.04] transition"
                 >
-                  Discover work
-                </button>
-                <button
-                  type="button"
-                  onClick={() => useShellUi.getState().openLaunch()}
-                  className="rounded-full bg-[var(--coral)] px-4 py-2 text-[12px] font-semibold text-white shadow-[0_8px_24px_rgba(255,118,95,.16)] hover:brightness-110"
-                >
-                  Start a project
+                  <p className="text-[14px] font-semibold text-white">Start screen share / co-work</p>
+                  <p className="mt-1 text-[11px] text-white/40">Drops you into a silent virtual table</p>
                 </button>
               </div>
-            </header>
 
-            <section>
-              <div className="mb-3 flex items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-[15px] font-semibold text-[var(--text)]">Work happening now</h2>
-                  <p className="mt-1 text-[11px] text-[var(--text-faint)]">Step into a room to quietly build alongside someone.</p>
-                </div>
-                <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">{liveCards.length} live</span>
+              <div className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-white/35">Your journeys</p>
+                {loading && <p className="text-[12px] text-white/40">Loading…</p>}
+                {!loading && visible.length === 0 && (
+                  <p className="text-[12px] text-white/40">No followed projects yet — start one or follow from Discover.</p>
+                )}
+                <ul className="space-y-2">
+                  {visible.slice(0, 6).map((ep) => (
+                    <li key={ep.projectId}>
+                      <button
+                        type="button"
+                        onClick={() => useShellUi.getState().openProject(ep.projectId)}
+                        className="w-full text-left rounded-xl bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2.5 transition"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-medium text-white truncate">{ep.projectTitle}</span>
+                          {ep.live && (
+                            <span className="shrink-0 text-[10px] font-semibold text-[#10B981]">LIVE</span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-white/45 line-clamp-1">{ep.headline}</p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="flex gap-3 overflow-x-auto pb-1 snap-x">
+            </div>
+          </section>
+
+          {/* RIGHT — Network pulse */}
+          <section className="min-h-0 flex flex-col gap-3">
+            <div className="flex-1 min-h-0 rounded-2xl border border-white/[0.06] bg-[#111318] overflow-hidden flex flex-col">
+              <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between">
+                <h2 className="text-[13px] font-semibold text-white flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                  Work happening now
+                </h2>
+                <span className="text-[11px] tabular-nums text-white/35">{liveCards.length}</span>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+                {liveError && <p className="text-[11px] text-red-300">{liveError}</p>}
+                {!loading && liveCards.length === 0 && (
+                  <p className="text-[12px] text-white/40 px-1 py-4">No live tables right now.</p>
+                )}
                 {liveCards.map((card, i) => (
                   <button
                     key={card.projectId + i}
                     type="button"
                     onClick={() => walkIn(card.roomId, card.projectId)}
-                    className="relative snap-start shrink-0 w-[16rem] sm:w-[18rem] aspect-[2/1] rounded-2xl overflow-hidden bg-[var(--surface)] p-3 flex flex-col justify-between text-left"
+                    className="w-full text-left rounded-xl overflow-hidden bg-black/30 hover:bg-black/40 ring-1 ring-[#10B981]/20 transition"
                   >
-                    {card.imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={card.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                    )}
-                    <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/25" />
-                    <span className="self-start rounded-full bg-[var(--coral)] px-2 py-0.5 text-[10px] font-bold text-white">
-                      Live{card.viewers ? ` · ${card.viewers}` : ""}
-                    </span>
-                    <div className="relative">
-                      <p className="text-[14px] font-semibold text-white leading-snug line-clamp-1">
-                        {card.title}
-                      </p>
-                      <p className="text-[11px] text-white/85 mt-0.5 truncate">
-                        @{card.handle}: {card.blurb}
-                      </p>
+                    <div className="relative aspect-[16/9] bg-[#0a0b0d]">
+                      {card.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={card.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-80" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                      <span className="absolute left-2 top-2 rounded-full bg-[#10B981] px-2 py-0.5 text-[9px] font-bold text-[#04120c]">
+                        LIVE
+                      </span>
+                      <div className="absolute bottom-2 left-2 right-2">
+                        <p className="text-[12px] font-semibold text-white truncate">{card.title}</p>
+                        <p className="text-[10px] text-white/60 truncate">@{card.handle} · {card.blurb}</p>
+                      </div>
+                    </div>
+                    <div className="px-2.5 py-2">
+                      <span className="text-[10px] font-semibold text-[#10B981]">Join table →</span>
                     </div>
                   </button>
                 ))}
-                {!loading && liveCards.length === 0 && (
-                  <div className="w-full rounded-2xl border border-dashed border-[var(--line)] px-4 py-5 text-center">
-                    <p role={liveError ? "alert" : undefined} className={`text-[12px] ${liveError ? "text-red-300" : "text-[var(--text-faint)]"}`}>
-                      {liveError || "No public work sessions are live right now."}
-                    </p>
-                    {liveError && <button type="button" onClick={() => void load()} className="mt-2 text-[11px] font-medium text-[var(--coral)] hover:underline">Try again</button>}
-                  </div>
-                )}
               </div>
-            </section>
+            </div>
 
-            <section className="space-y-6">
-              {loading && <div className="h-48 rounded-xl bg-white/[0.03] animate-pulse" />}
-              {feedError && (
-                <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/[0.04] px-4 py-4">
-                  <p className="text-[13px] font-medium text-red-200">Your circle updates could not be loaded.</p>
-                  <p className="mt-1 text-[11px] text-red-200/70">{feedError}</p>
-                  <button type="button" onClick={() => void load()} className="mt-3 rounded-full border border-red-300/20 px-3 py-1.5 text-[11px] text-red-200 hover:bg-red-300/[0.06]">Retry</button>
-                </div>
-              )}
-              {!loading && visible.length === 0 && (
-                !feedError && <div className="rounded-2xl border border-dashed border-[var(--line-strong)] px-5 py-8 text-center">
-                  <p className="text-[14px] font-medium text-[var(--text)]">{signedIn ? "Your circle is ready for its first update." : "Your studio starts with the work you follow."}</p>
-                  <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-[var(--text-faint)]">
-                    {signedIn ? "Follow a project journey and its next milestone will find its way here." : "Explore project journeys, follow the ones that interest you, and return to see how they change."}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      useShellUi.getState().setActiveTab("explore");
-                      window.dispatchEvent(new CustomEvent("wippo:nav", { detail: "stories" }));
-                    }}
-                    className="mt-4 rounded-full border border-[var(--line-strong)] px-4 py-2 text-[12px] font-medium text-[var(--text)] hover:bg-white/[0.05]"
-                  >
-                    Explore project journeys
-                  </button>
-                </div>
-              )}
-              {visible.map((ep) => (
-                <MilestoneEpisode
-                  key={ep.projectId}
-                  episode={ep}
-                  compact
-                  bare
-                  onOpenJourney={() => useShellUi.getState().openProject(ep.projectId)}
-                />
-              ))}
-            </section>
-            <section className="rounded-3xl border border-[var(--line)] bg-[linear-gradient(120deg,rgba(255,118,95,.07),rgba(14,19,28,.7)_48%,rgba(159,227,192,.04))] p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">Open collaboration</p>
-                  <h2 className="mt-1 text-[16px] font-semibold text-[var(--text)]">Projects that need a hand</h2>
-                  <p className="mt-1 text-[12px] text-[var(--text-muted)]">Offer a useful perspective, then continue the conversation in the project room.</p>
-                </div>
-                <span className="text-[11px] text-[var(--text-faint)]">{helpRows.length} open {helpRows.length === 1 ? "ask" : "asks"}</span>
+            <div className="shrink-0 max-h-[40%] rounded-2xl border border-[#F59E0B]/25 bg-[#111318] overflow-hidden flex flex-col">
+              <div className="px-4 py-2.5 border-b border-white/[0.05] flex items-center justify-between">
+                <h2 className="text-[13px] font-semibold text-amber-100 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
+                  Needs a hand
+                </h2>
+                <span className="text-[11px] text-white/35">{helpRows.length}</span>
               </div>
-              {helpError ? (
-                <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/[0.04] px-4 py-4">
-                  <p className="text-[12px] text-red-200">{helpError}</p>
-                  <button type="button" onClick={() => void load()} className="mt-2 text-[11px] font-medium text-[var(--coral)] hover:underline">Retry</button>
+              <div className="overflow-y-auto p-3 space-y-2 max-h-48">
+                {helpError && <p className="text-[11px] text-red-300">{helpError}</p>}
+                {helpRows.length === 0 && (
+                  <p className="text-[12px] text-white/40">No open bottlenecks.</p>
+                )}
+                {helpRows.map((h) => (
+                  <div key={h.id} className="rounded-xl bg-white/[0.03] px-3 py-2.5">
+                    <p className="text-[12px] font-medium text-white line-clamp-1">{h.title}</p>
+                    <p className="text-[10px] text-white/45 mt-0.5">
+                      @{h.handle} · {h.projectTitle}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={claiming === h.id}
+                      onClick={() => void claimHelp(h)}
+                      className="mt-2 rounded-full bg-[#F59E0B] px-2.5 py-1 text-[10px] font-semibold text-[#1a1200] hover:brightness-110 disabled:opacity-50"
+                    >
+                      {claiming === h.id ? "…" : "Jump in & help"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* Bottom — recent log reels */}
+        <section className="shrink-0 rounded-2xl border border-white/[0.06] bg-[#111318] px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wider text-white/35 mb-2 px-1">Recent video log reels</p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {episodes.slice(0, 8).map((ep) => (
+              <button
+                key={ep.projectId}
+                type="button"
+                onClick={() => useShellUi.getState().openProject(ep.projectId)}
+                className="shrink-0 w-40 rounded-xl bg-black/40 overflow-hidden text-left hover:ring-1 hover:ring-white/15"
+              >
+                <div className="aspect-video bg-[#0a0b0d] relative">
+                  {ep.thumbUrl || ep.mediaUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={ep.thumbUrl || ep.mediaUrl || ""}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : null}
                 </div>
-              ) : helpRows.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-[var(--line-strong)] px-4 py-5 text-[12px] text-[var(--text-faint)]">
-                  No open requests right now. New asks from project owners will appear here.
-                </p>
-              ) : (
-                <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {helpRows.map((h) => (
-                    <li key={h.id} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/90 p-3 sm:p-4">
-                      <p className="text-[13px] font-semibold text-[var(--text)]">{h.title}</p>
-                      <p className="mt-1 text-[11px] text-[var(--text-faint)]">{h.projectTitle} · @{h.handle} · {h.tags}</p>
-                      <button type="button" disabled={claiming === h.id} onClick={() => void claimHelp(h)} className="mt-3 rounded-full border border-amber-300/30 px-3.5 py-1.5 text-[11px] font-medium text-amber-200 hover:bg-amber-300/10 disabled:opacity-50">
-                        {claiming === h.id ? "Claiming…" : "Offer to help"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {actionError && <p role="alert" className="mt-3 text-[11px] text-red-400">{actionError}</p>}
-            </section>
+                <div className="p-2">
+                  <p className="text-[11px] font-medium text-white truncate">{ep.projectTitle}</p>
+                  <p className="text-[10px] text-white/40 line-clamp-1">{ep.headline}</p>
+                </div>
+              </button>
+            ))}
+            {episodes.length === 0 && (
+              <p className="text-[12px] text-white/40 px-2 py-3">Log reels from your circle appear here.</p>
+            )}
           </div>
-        </main>
+        </section>
       </div>
     </div>
   );

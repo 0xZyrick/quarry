@@ -1,23 +1,41 @@
 "use client";
-/**
- * Single entrance: "What are you working on?"
- * Pick existing project or create → then update (images/video) or go live (URL).
- */
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, type FormEvent } from "react";
 import { useOnboarding } from "../onboarding/OnboardingProvider";
+import { useGuild } from "@/lib/store";
 import CreateProjectFlow, { type CreatedProject } from "../project/CreateProjectFlow";
-import CustomDropdown from "../shared/CustomDropdown";
+import SocialExportCard, { type ExportCardData } from "../project/SocialExportCard";
+import { parseStreamUrl } from "@/lib/streamEmbed";
 import { navigateToRoute } from "@/lib/appRoutes";
 
-type Step = "ask" | "pick" | "update" | "live" | "new-project";
+type MediaSource = "live" | "upload";
+type ProjectOption = { id: string; title: string };
+type Phase = "Idea" | "Prototype" | "Deploy";
 
-async function uploadFile(file: File) {
-  const fd = new FormData();
-  fd.append("file", file);
-  const r = await fetch("/api/upload", { method: "POST", body: fd });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error || "Upload failed");
-  return d as { url: string };
+async function uploadVideo(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/upload", { method: "POST", body: form });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Video upload failed.");
+  return result as { url: string };
+}
+
+function videoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Math.ceil(video.duration));
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read this video file."));
+    };
+    video.src = url;
+  });
 }
 
 export default function CreateEntrance({
@@ -27,405 +45,380 @@ export default function CreateEntrance({
   open: boolean;
   onClose: () => void;
 }) {
-  const { data: onb, signedIn, requireAuth } = useOnboarding();
-  const creatorId = onb.uid || null;
-  const [step, setStep] = useState<Step>("ask");
-  const [projects, setProjects] = useState<{ id: string; title: string }[]>([]);
+  const { data: account, signedIn, requireAuth } = useOnboarding();
+  const studioUnlocked = useGuild((s) => !!s.profile?.studioUnlocked);
+  const [studioCode, setStudioCode] = useState("");
+  const [studioCodeError, setStudioCodeError] = useState("");
+  const [studioCodeBusy, setStudioCodeBusy] = useState(false);
+  const creatorId = account.uid || null;
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectId, setProjectId] = useState("");
-  const [context, setContext] = useState("");
+  const [phase, setPhase] = useState<Phase>("Prototype");
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [source, setSource] = useState<MediaSource>("live");
   const [liveUrl, setLiveUrl] = useState("");
-  const [images, setImages] = useState<File[]>([]);
-  const [updateKind, setUpdateKind] = useState<"MILESTONE" | "DEAD_END" | "DECISION" | "PARTIAL">("MILESTONE");
-  const [triedLines, setTriedLines] = useState("");
-  const [promptUsed, setPromptUsed] = useState("");
-  const [toolsLine, setToolsLine] = useState("");
+  const [video, setVideo] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+  const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [published, setPublished] = useState<ExportCardData | null>(null);
 
   useEffect(() => {
     if (!open) {
-      setStep("ask");
-      setErr("");
-      setContext("");
+      setTitle("");
+      setSummary("");
       setLiveUrl("");
-      setImages([]);
+      setVideo(null);
+      setPhase("Prototype");
+      setSource("live");
+      setError("");
+      setPublished(null);
       return;
     }
     if (!creatorId) return;
+    let cancelled = false;
     fetch(`/api/projects?creatorId=${encodeURIComponent(creatorId)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const list = (d.projects || d.mosaic || []).map((p: any) => ({
-          id: p.id,
-          title: p.title,
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Could not load your projects.");
+        const list = (result.projects || result.mosaic || []).map((project: ProjectOption) => ({
+          id: project.id,
+          title: project.title,
         }));
-        setProjects(list);
-        if (list[0]) setProjectId(list[0].id);
+        if (!cancelled) {
+          setProjects(list);
+          setProjectId((current) => current || list[0]?.id || "");
+        }
       })
-      .catch(() => {});
+      .catch((cause) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load your projects.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, creatorId]);
 
-  if (!open) return null;
-
-  const needAuth = (why: string) => {
-    if (signedIn) return false;
-    requireAuth?.(why);
-    return true;
-  };
-
-  const goPick = (next: "update" | "live") => {
-    if (needAuth("share what you're building")) return;
-    if (projects.length === 0) {
-      setCreateOpen(true);
-      return;
-    }
-    setStep("pick");
-    // stash intent in data attribute via state: after pick go to next
-    (window as any).__wippoCreateNext = next;
-  };
-
-  const afterPick = () => {
-    const next = (window as any).__wippoCreateNext as "update" | "live";
-    setStep(next === "live" ? "live" : "update");
-  };
-
-  const onCreated = (p: CreatedProject, postFirst: boolean) => {
-    setProjects((list) => [{ id: p.id, title: p.title }, ...list]);
-    setProjectId(p.id);
+  const onProjectCreated = (project: CreatedProject) => {
+    setProjects((current) => [{ id: project.id, title: project.title }, ...current]);
+    setProjectId(project.id);
     setCreateOpen(false);
-    setStep(postFirst ? "update" : "ask");
   };
 
-  const submitUpdate = async () => {
+  const submit = async () => {
+    if (!signedIn || !creatorId) {
+      requireAuth("create a Studio update", () => void submit());
+      return;
+    }
     if (!projectId) {
-      setErr("Pick a project");
+      setError("Create or select a project first.");
       return;
     }
-    if (context.trim().length < 3) {
-      setErr("Add a short note about this update");
+    if (title.trim().length < 3 || summary.trim().length < 3) {
+      setError("Add an update title and a short description.");
       return;
     }
-    if (images.length < 1) {
-      setErr("Add at least one image (max 3)");
-      return;
-    }
+    const projectName = projects.find((project) => project.id === projectId)?.title || "Project";
     setBusy(true);
-    setErr("");
+    setError("");
     try {
-      const urls: string[] = [];
-      for (const f of images.slice(0, 3)) {
-        const u = await uploadFile(f);
-        urls.push(u.url);
-      }
-      const r = await fetch(`/api/projects/${projectId}/nodes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summaryText: context.trim(),
-          imageUrls: urls,
-          prevSnapshotUrl: urls[0],
-          nextSnapshotUrl: urls[1] || urls[0],
-          updateKind,
-          promptUsed: promptUsed.trim() || undefined,
-          tools: toolsLine
-            .split(/,/)
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .slice(0, 8),
-          tried: triedLines
-            .split("\n")
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((line) => {
-              const m = line.match(/^(DEAD_END|PARTIAL|WORKED|ARTIFACT)\s*[:—-]\s*(.+)$/i);
-              if (m) {
-                return {
-                  outcome: m[1].toUpperCase().replace(" ", "_"),
-                  detail: m[2],
-                };
-              }
-              return { outcome: "WORKED", detail: line };
-            }),
-          acknowledgedPolicy: true,
-          domain: "code",
-        }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || "Failed");
-      onClose();
-    } catch (e: any) {
-      setErr(e.message || "Failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+      if (source === "live") {
+        const parsed = parseStreamUrl(liveUrl);
+        if (!parsed?.embedUrl || (parsed.platform !== "twitch" && parsed.platform !== "youtube")) {
+          throw new Error("Paste a valid Twitch or YouTube live stream link.");
+        }
+        const nodeResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/nodes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            updateTitle: title.trim(),
+            phaseTitle: phase,
+            summaryText: summary.trim(),
+            liveUrl: liveUrl.trim(),
+            startSession: true,
+            acknowledgedPolicy: true,
+            domain: "build",
+            currentState: summary.trim(),
+          }),
+        });
+        const nodeResult = await nodeResponse.json().catch(() => ({}));
+        if (!nodeResponse.ok) throw new Error(nodeResult.error || "Could not create the live update.");
 
-  const submitLive = async () => {
-    if (!projectId) {
-      setErr("Pick a project");
-      return;
-    }
-    const url = liveUrl.trim();
-    if (url.length < 12 || !/^https?:\/\//i.test(url)) {
-      setErr("Paste a full Twitch or YouTube Live URL");
-      return;
-    }
-    setBusy(true);
-    setErr("");
-    try {
-      const nodeRes = await fetch(`/api/projects/${projectId}/nodes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summaryText: context.trim() || "Live session",
-          phaseTitle: "LIVE",
-          liveUrl: url,
-          startSession: true,
-          acknowledgedPolicy: true,
-          domain: "build",
-        }),
-      });
-      const nodeData = await nodeRes.json().catch(() => ({}));
-      if (!nodeRes.ok) throw new Error(nodeData.error || "Could not start");
-
-      if (creatorId) {
-        await fetch("/api/sessions", {
+        const sessionResponse = await fetch("/api/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             creatorId,
             projectId,
-            journeyNodeId: nodeData.node?.id,
-            title: context.trim() || "Live session",
-            liveUrl: url,
+            journeyNodeId: nodeResult.node?.id,
+            title: title.trim(),
+            currentState: summary.trim(),
+            liveUrl: liveUrl.trim(),
             roomId: projectId,
             mode: "LIVE",
           }),
-        }).catch(() => {});
+        });
+        const sessionResult = await sessionResponse.json().catch(() => ({}));
+        if (!sessionResponse.ok) {
+          await fetch(`/api/projects/${encodeURIComponent(projectId)}/nodes`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nodeId: nodeResult.node?.id, endSession: true }),
+          });
+          throw new Error(sessionResult.error || "The update was created, but the live room could not start.");
+        }
+        onClose();
+        navigateToRoute({ kind: "room", id: projectId });
+        return;
       }
 
-      onClose();
-      navigateToRoute({ kind: "room", id: projectId });
-    } catch (e: any) {
-      setErr(e.message || "Failed");
+      if (!video) throw new Error("Choose a video file to upload.");
+      if (!video.type.startsWith("video/")) throw new Error("Choose a video file.");
+      const durationSecs = await videoDuration(video);
+      if (!Number.isFinite(durationSecs) || durationSecs < 1 || durationSecs > 90) {
+        throw new Error("Video updates must be 90 seconds or shorter.");
+      }
+      const uploaded = await uploadVideo(video);
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/nodes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updateTitle: title.trim(),
+          phaseTitle: phase,
+          summaryText: summary.trim(),
+          media: { videoUrl: uploaded.url, durationSecs, tag: phase },
+          acknowledgedPolicy: true,
+          domain: "build",
+          currentState: summary.trim(),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not publish this video update.");
+      const updateNumber = Number(result.node?.position) || 1;
+      setPublished({
+        projectId,
+        projectName,
+        title: title.trim(),
+        summary: summary.trim(),
+        updateNumber,
+        phase,
+        handle: account.name?.replace(/^@/, "") || "builder",
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not publish this update.");
     } finally {
       setBusy(false);
     }
   };
 
+
+  const unlockStudio = async (event: FormEvent) => {
+    event.preventDefault();
+    setStudioCodeBusy(true);
+    setStudioCodeError("");
+    try {
+      const response = await fetch("/api/studio/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: studioCode }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not unlock Studio.");
+      useGuild.setState((state) => ({
+        profile: state.profile ? { ...state.profile, studioUnlocked: true } : state.profile,
+      }));
+      setStudioCode("");
+    } catch (error) {
+      setStudioCodeError(error instanceof Error ? error.message : "Could not unlock Studio.");
+    } finally {
+      setStudioCodeBusy(false);
+    }
+  };
+
+  if (!open) return null;
+
+  // Invite only when trying to create — studio itself stays viewable
+  if (!studioUnlocked) {
+    return (
+      <div className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-black/70 px-4 py-8">
+        <section className="relative w-full max-w-md rounded-2xl border border-white/15 bg-[#111318] p-6 shadow-2xl">
+          <button type="button" onClick={onClose} className="absolute right-5 top-5 text-[12px] text-white/50 hover:text-white">
+            Cancel
+          </button>
+          <div className="border-y border-dashed border-white/25 py-3 text-center">
+            <h2 className="text-[12px] font-bold uppercase tracking-[0.16em] text-white">Creator invite code</h2>
+          </div>
+          <p className="mt-4 text-[13px] leading-relaxed text-white/55">
+            You can browse Studio freely. Enter a creator code to publish projects, updates, and live sessions.
+          </p>
+          {signedIn ? (
+            <form onSubmit={unlockStudio} className="mt-5 space-y-3">
+              <label className="block text-[11px] font-medium text-white/60" htmlFor="create-studio-code">
+                Creator code
+              </label>
+              <input
+                id="create-studio-code"
+                autoComplete="off"
+                value={studioCode}
+                onChange={(e) => setStudioCode(e.target.value)}
+                placeholder="Enter your creator code"
+                className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-3 text-[13px] text-white outline-none focus:border-white/35"
+              />
+              {studioCodeError && <p role="alert" className="text-[12px] text-red-300">{studioCodeError}</p>}
+              <button
+                type="submit"
+                disabled={!studioCode.trim() || studioCodeBusy}
+                className="w-full rounded-xl bg-white py-3 text-[12px] font-bold uppercase tracking-wide text-black disabled:opacity-40"
+              >
+                {studioCodeBusy ? "Checking…" : "Unlock create"}
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "unlock Studio create" }))}
+              className="mt-5 w-full rounded-xl bg-white py-3 text-[12px] font-bold uppercase tracking-wide text-black"
+            >
+              Sign in to unlock
+            </button>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        {step === "ask" && (
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-[18px] font-semibold text-[var(--text)]">What are you working on?</h2>
-              <p className="text-[13px] text-[var(--text-muted)] mt-1">
-                Every update belongs to a project journey — live link, stills, or a short clip.
-              </p>
+    <>
+      <div className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-black/70 px-4 py-8">
+        <section className="relative w-full max-w-2xl rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 sm:p-7 shadow-2xl">
+          <button type="button" onClick={onClose} className="absolute right-5 top-5 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]">Cancel</button>
+          <h2 className="pr-16 text-[17px] font-semibold text-[var(--text)]">Launch session / post update</h2>
+          <p className="mt-1 text-[12px] text-[var(--text-muted)]">
+            Choose a project, name this update, then go live or publish a video.
+          </p>
+
+          <form onSubmit={(event) => { event.preventDefault(); void submit(); }} className="mt-6 space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-[11px] font-medium text-[var(--text-muted)]">
+                Project
+                <select
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-3 text-[13px] text-[var(--text)]"
+                >
+                  <option value="">Select a project</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
+                </select>
+              </label>
+              <label className="block text-[11px] font-medium text-[var(--text-muted)]">
+                Pipeline node
+                <select
+                  value={phase}
+                  onChange={(event) => setPhase(event.target.value as Phase)}
+                  className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-3 text-[13px] text-[var(--text)]"
+                >
+                  {(["Idea", "Prototype", "Deploy"] as const).map((value) => <option key={value}>{value}</option>)}
+                </select>
+              </label>
             </div>
-            <button
-              type="button"
-              onClick={() => goPick("update")}
-              className="w-full rounded-2xl border border-[var(--line)] px-4 py-4 text-left hover:border-[var(--line-strong)]"
-            >
-              <p className="text-[14px] font-semibold text-[var(--text)]">Post an update</p>
-              <p className="text-[12px] text-[var(--text-faint)] mt-0.5">Images + context on a project</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => goPick("live")}
-              className="w-full rounded-2xl border border-[var(--line)] px-4 py-4 text-left hover:border-[var(--line-strong)]"
-            >
-              <p className="text-[14px] font-semibold text-[var(--text)]">Go live</p>
-              <p className="text-[12px] text-[var(--text-faint)] mt-0.5">
-                Paste Twitch or YouTube Live — Wippo embeds it
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (needAuth("start a project")) return;
-                setCreateOpen(true);
-              }}
-              className="w-full rounded-2xl border border-dashed border-[var(--line-strong)] px-4 py-4 text-left"
-            >
-              <p className="text-[14px] font-semibold text-[var(--coral)]">New project</p>
-              <p className="text-[12px] text-[var(--text-faint)] mt-0.5">Name it, optional description and tags</p>
-            </button>
-            <button type="button" onClick={onClose} className="w-full text-[12px] text-[var(--text-muted)] py-2">
-              Cancel
-            </button>
-          </div>
-        )}
+            {projects.length === 0 && (
+              <button type="button" onClick={() => setCreateOpen(true)} className="text-[12px] font-medium text-[var(--coral)]">
+                + Create your first project
+              </button>
+            )}
+            {projects.length > 0 && (
+              <button type="button" onClick={() => setCreateOpen(true)} className="text-[11px] text-[var(--coral)]">
+                + New project
+              </button>
+            )}
 
-        {step === "pick" && (
-          <div className="space-y-4">
-            <h2 className="text-[16px] font-semibold text-[var(--text)]">Which project?</h2>
-            <CustomDropdown
-              label="Choose a project"
-              value={projectId}
-              options={projects.map((project) => ({ value: project.id, label: project.title }))}
-              onChange={setProjectId}
-            />
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="text-[12px] text-[var(--coral)]"
-            >
-              + New project
-            </button>
-            <button
-              type="button"
-              onClick={afterPick}
-              disabled={!projectId}
-              className="w-full rounded-full bg-[var(--coral)] py-3 text-[13px] font-semibold text-white disabled:opacity-40"
-            >
-              Continue
-            </button>
-            <button type="button" onClick={() => setStep("ask")} className="w-full text-[12px] text-[var(--text-muted)]">
-              Back
-            </button>
-          </div>
-        )}
+            <label className="block text-[11px] font-medium text-[var(--text-muted)]">
+              Update title
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={120}
+                placeholder="Fixing ICE memory leaks"
+                className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-3 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)]"
+              />
+            </label>
+            <label className="block text-[11px] font-medium text-[var(--text-muted)]">
+              What are you working on?
+              <textarea
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Refactoring WebRTC signaling to fix ICE candidate leaks…"
+                className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-3 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)]"
+              />
+            </label>
 
-        {step === "update" && (
-          <div className="space-y-4">
-            <h2 className="text-[16px] font-semibold text-[var(--text)]">This update</h2>
-            <textarea
-              value={context}
-              onChange={(e) => setContext(e.target.value)}
-              rows={3}
-              placeholder="What changed? What are you trying?"
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-            />
-            <div>
-              <label className="text-[11px] text-[var(--text-faint)]">Update kind</label>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {(
-                  [
-                    ["MILESTONE", "Milestone"],
-                    ["DEAD_END", "Dead end"],
-                    ["DECISION", "Decision"],
-                    ["PARTIAL", "Partial"],
-                  ] as const
-                ).map(([id, label]) => (
+            <fieldset>
+              <legend className="text-[11px] font-medium text-[var(--text-muted)]">Choose media source</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {([
+                  ["live", "Live stream", "Paste a Twitch or YouTube Live link"],
+                  ["upload", "Video upload", "Publish a replayable video update"],
+                ] as const).map(([value, label, hint]) => (
                   <button
-                    key={id}
+                    key={value}
                     type="button"
-                    onClick={() => setUpdateKind(id)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] border ${
-                      updateKind === id
-                        ? "border-[var(--coral)] bg-[var(--coral)]/15 text-[var(--text)]"
-                        : "border-[var(--line)] text-[var(--text-muted)]"
-                    }`}
+                    aria-pressed={source === value}
+                    onClick={() => setSource(value)}
+                    className={`rounded-xl border p-3 text-left ${source === value ? "border-[var(--coral)] bg-[var(--coral)]/10" : "border-[var(--line)]"}`}
                   >
-                    {label}
+                    <span className="block text-[12px] font-semibold text-[var(--text)]">{label}</span>
+                    <span className="mt-1 block text-[10px] text-[var(--text-faint)]">{hint}</span>
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label className="text-[11px] text-[var(--text-faint)]">
-                What was tried (one per line, optional: DEAD_END: …)
+            </fieldset>
+
+            {source === "live" ? (
+              <label className="block text-[11px] font-medium text-[var(--text-muted)]">
+                Live stream URL
+                <input
+                  type="url"
+                  value={liveUrl}
+                  onChange={(event) => setLiveUrl(event.target.value)}
+                  placeholder="https://www.twitch.tv/... or YouTube Live"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-3 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)]"
+                />
               </label>
-              <textarea
-                value={triedLines}
-                onChange={(e) => setTriedLines(e.target.value)}
-                rows={3}
-                placeholder={"DEAD_END: Photographed clouds felt flat\nWORKED: Procedural soft noise"}
-                className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[12px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-[var(--text-faint)]">Prompt used (optional)</label>
-              <input
-                value={promptUsed}
-                onChange={(e) => setPromptUsed(e.target.value)}
-                placeholder="LLM / helper prompt"
-                className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[12px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-[var(--text-faint)]">Tools (comma-separated)</label>
-              <input
-                value={toolsLine}
-                onChange={(e) => setToolsLine(e.target.value)}
-                placeholder="Figma, Claude, Three.js"
-                className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[12px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-[var(--text-faint)]">Images (1–3)</label>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => setImages(Array.from(e.target.files || []).slice(0, 3))}
-                className="mt-1 block w-full text-[12px] text-[var(--text-muted)]"
-              />
-              {images.length > 0 && (
-                <p className="text-[11px] text-[var(--text-faint)] mt-1">{images.length} selected</p>
-              )}
-            </div>
-            {err && <p className="text-[12px] text-red-400">{err}</p>}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={submitUpdate}
-              className="w-full rounded-full bg-[var(--coral)] py-3 text-[13px] font-semibold text-white disabled:opacity-40"
-            >
-              {busy ? "Posting…" : "Post update"}
-            </button>
-            <button type="button" onClick={() => setStep("pick")} className="w-full text-[12px] text-[var(--text-muted)]">
-              Back
-            </button>
-          </div>
-        )}
+            ) : (
+              <label className="block text-[11px] font-medium text-[var(--text-muted)]">
+                Video file (up to 40 MB, 90 seconds)
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(event) => setVideo(event.target.files?.[0] || null)}
+                  className="mt-1.5 block w-full text-[12px] text-[var(--text-muted)]"
+                />
+                {video && <span className="mt-1 block text-[10px] text-[var(--text-faint)]">{video.name}</span>}
+              </label>
+            )}
 
-        {step === "live" && (
-          <div className="space-y-4">
-            <h2 className="text-[16px] font-semibold text-[var(--text)]">Go live</h2>
-            <input
-              value={liveUrl}
-              onChange={(e) => setLiveUrl(e.target.value)}
-              placeholder="https://www.twitch.tv/… or youtube live URL"
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-            />
-            <input
-              value={context}
-              onChange={(e) => setContext(e.target.value)}
-              placeholder="What are you working on in this session?"
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-            />
-            <p className="text-[11px] text-[var(--text-faint)]">
-              Wippo embeds your stream. When you finish, attach the VOD on the journey update.
-            </p>
-            {err && <p className="text-[12px] text-red-400">{err}</p>}
+            {error && <p role="alert" className="text-[12px] text-red-400">{error}</p>}
             <button
-              type="button"
+              type="submit"
               disabled={busy}
-              onClick={submitLive}
               className="w-full rounded-full bg-[var(--coral)] py-3 text-[13px] font-semibold text-white disabled:opacity-40"
             >
-              {busy ? "Starting…" : "Go live"}
+              {busy ? (source === "live" ? "Starting…" : "Uploading…") : source === "live" ? "Go live / Start session" : "Publish video update"}
             </button>
-            <button type="button" onClick={() => setStep("pick")} className="w-full text-[12px] text-[var(--text-muted)]">
-              Back
-            </button>
-          </div>
-        )}
+          </form>
+        </section>
+
+        <CreateProjectFlow
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={onProjectCreated}
+          creatorId={creatorId}
+          handle={account.name || ""}
+        />
       </div>
-
-      <CreateProjectFlow
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={onCreated}
-        creatorId={creatorId}
-        handle={onb.name || ""}
-      />
-    </div>
+      {published && <SocialExportCard data={published} onClose={onClose} />}
+    </>
   );
 }

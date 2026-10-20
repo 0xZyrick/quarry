@@ -2,14 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/db";
 import { detectPlatform, parseStreamUrl, resolveVodUrl } from "@/lib/streamEmbed";
 import { dayKey } from "@/lib/activityGrid";
+import { readSession } from "@/lib/server/session";
+import { unlockedStudioSession } from "@/lib/server/studioAccess";
 
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const active = searchParams.get("active");
+    const roomId = searchParams.get("roomId");
     const sessions = await prisma.workSession.findMany({
-      where: active === "1" ? { isActive: true, mode: "LIVE", visibility: "PUBLIC" } : undefined,
+      where: active === "1" || roomId
+        ? {
+            isActive: true,
+            ...(active === "1" ? { mode: "LIVE" as const, visibility: "PUBLIC" as const } : {}),
+            ...(roomId ? { roomId } : {}),
+          }
+        : undefined,
       include: active === "1" ? {
         project: {
           select: {
@@ -34,6 +43,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const accountSession = await unlockedStudioSession(req);
+  if (!accountSession) return NextResponse.json({ error: "Unlock Studio before starting a session." }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const {
     creatorId,
@@ -51,6 +62,7 @@ export async function POST(req: NextRequest) {
 
   if (!creatorId || !title)
     return NextResponse.json({ error: "creatorId and title required" }, { status: 400 });
+  if (creatorId !== accountSession.uid) return NextResponse.json({ error: "You can only start your own session." }, { status: 403 });
 
   const liveUrl =
     typeof liveUrlRaw === "string" && liveUrlRaw.trim().length > 8 ? liveUrlRaw.trim() : null;
@@ -65,7 +77,7 @@ export async function POST(req: NextRequest) {
 
   const livePlatform = liveUrl ? detectPlatform(liveUrl) : null;
 
-  const session = await prisma.workSession.create({
+  const workSession = await prisma.workSession.create({
     data: {
       creatorId,
       projectId: projectId || null,
@@ -97,10 +109,12 @@ export async function POST(req: NextRequest) {
       .catch(() => {});
   }
 
-  return NextResponse.json({ session }, { status: 201 });
+  return NextResponse.json({ session: workSession }, { status: 201 });
 }
 
 export async function PATCH(req: NextRequest) {
+  const session = readSession(req);
+  if (!session) return NextResponse.json({ error: "Sign in to end this session." }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const { sessionId, roomId, creatorId, endAll, vodUrl: vodUrlRaw } = body;
 
@@ -113,6 +127,7 @@ export async function PATCH(req: NextRequest) {
   };
 
   if (endAll && creatorId) {
+    if (String(creatorId) !== session.uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const r = await prisma.workSession.updateMany({
       where: { creatorId: String(creatorId), isActive: true },
       data: endData,
@@ -123,6 +138,7 @@ export async function PATCH(req: NextRequest) {
   if (sessionId) {
     const existing = await prisma.workSession.findUnique({ where: { id: String(sessionId) } });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (existing.creatorId !== session.uid) return NextResponse.json({ error: "Only the session owner can end it." }, { status: 403 });
 
     if (!vodUrl && existing.liveUrl) {
       vodUrl = await resolveVodUrl({
@@ -150,8 +166,9 @@ export async function PATCH(req: NextRequest) {
       });
     } catch {}
 
+    let node = null;
     if (existing.journeyNodeId) {
-      await prisma.journeyNode
+      node = await prisma.journeyNode
         .update({
           where: { id: existing.journeyNodeId },
           data: {
@@ -159,16 +176,19 @@ export async function PATCH(req: NextRequest) {
             ...(vodUrl ? { vodUrl } : {}),
           },
         })
-        .catch(() => {});
+        .catch(() => null);
     }
 
-    return NextResponse.json({ session: s });
+    return NextResponse.json({ session: s, node, vodUrl });
   }
 
   if (roomId) {
     const active = await prisma.workSession.findMany({
       where: { roomId: String(roomId), isActive: true },
     });
+    if (active.some((item) => item.creatorId !== session.uid)) {
+      return NextResponse.json({ error: "Only the session owner can end it." }, { status: 403 });
+    }
     const r = await prisma.workSession.updateMany({
       where: { roomId: String(roomId), isActive: true },
       data: endData,

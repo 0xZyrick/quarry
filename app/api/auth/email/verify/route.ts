@@ -1,5 +1,4 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/server/db";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { emailAuthClient, hasEmailAuthConfig, normalizeEmail } from "@/lib/server/emailAuth";
 import { json, sameOrigin } from "@/lib/server/authz";
 import { limit, ipOf } from "@/lib/server/ratelimit";
@@ -7,6 +6,7 @@ import { cookieFor, Session } from "@/lib/server/session";
 import { profileFor } from "@/lib/server/registry";
 import { cleanName } from "@/lib/server/invite";
 
+const prisma = new PrismaClient();
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -17,8 +17,8 @@ export async function POST(req: Request) {
   if (!email || !/^\d{6,8}$/.test(token)) {
     return json({ error: "Enter the email and verification code." }, 400);
   }
-  if (!limit(`verify:${ipOf(req)}`, 12, 15 * 60_000) ||
-      !limit(`verify-email:${email}`, 6, 15 * 60_000)) {
+  if (!(await limit(`verify:${ipOf(req)}`, 12, 15 * 60_000)) ||
+      !(await limit(`verify-email:${email}`, 6, 15 * 60_000))) {
     return json({ error: "Too many code attempts. Request a new code later." }, 429);
   }
   if (!hasEmailAuthConfig()) {
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     const pending = await prisma.pendingEmailAuth.findUnique({ where: { email: normalized } });
     if (!pending || pending.expiresAt.getTime() <= Date.now()) {
       if (pending) await prisma.pendingEmailAuth.delete({ where: { email: normalized } });
-      return json({ error: "Your invite setup expired. Start again with your invite code." }, 410);
+      return json({ error: "Your account setup expired. Start again with your email." }, 410);
     }
 
     try {
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
       : null;
   const session = { uid: user.id, handle: user.handle || normalized, track };
   return json(
-    { account: { id: user.id, handle: session.handle, track }, profile: profileFor(session) },
+    { account: { id: user.id, handle: session.handle, track }, profile: await profileFor(session) },
     200,
     cookieFor(session)
   );

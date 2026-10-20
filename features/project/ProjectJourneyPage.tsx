@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { isInCircle, currentUid } from "@/lib/circle";
 import { useShellUi } from "@/lib/shellUi";
 import { navigateToRoute } from "@/lib/appRoutes";
+import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
 
-type MediaDrop = { id?: string; videoUrl?: string | null; imageUrl?: string | null };
+type MediaDrop = { id?: string; videoUrl?: string | null; imageUrl?: string | null; nextSnapshotUrl?: string | null; prevSnapshotUrl?: string | null };
 type Tried = { kind: string; text: string };
 type Discussion = {
   id: string;
@@ -21,6 +22,7 @@ type Node = {
   id: string;
   position: number;
   dayLabel: string;
+  updateTitle?: string | null;
   phaseTitle: string;
   summaryText: string;
   evolutionDelta?: string | null;
@@ -206,6 +208,7 @@ export default function ProjectJourneyPage({
   projectId: string;
   onClose: () => void;
 }) {
+  const { requireAuth } = useOnboarding();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -378,8 +381,8 @@ export default function ProjectJourneyPage({
 
   const toggleProjectFollow = async () => {
     if (!project) return;
-    if (isGuest) {
-      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "follow a project journey" }));
+    if (!currentUid()) {
+      requireAuth("follow a project journey", () => void toggleProjectFollow());
       return;
     }
     const uid = currentUid();
@@ -437,501 +440,191 @@ export default function ProjectJourneyPage({
       timeLabel: d.timeLabel || "0:00",
     })) || [];
 
+    // Newest first for the log list
+  const logNodes = [...nodes].sort((a, b) => (b.position || 0) - (a.position || 0));
+
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-[var(--page)] z-20">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 pt-4 pb-20">
+    <div className="absolute inset-0 overflow-y-auto bg-[#0B0C0E] z-20">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 pt-4 pb-24 font-mono">
         <button
           type="button"
           onClick={onClose}
-          className="mb-4 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"
+          className="mb-4 text-[12px] text-white/45 hover:text-white"
         >
           ← Back
         </button>
-        {/* Header */}
-        <header className="mb-5 rounded-3xl border border-[var(--line)] bg-[radial-gradient(ellipse_at_top_right,rgba(255,118,95,.10),transparent_48%),linear-gradient(145deg,var(--surface),rgba(14,19,28,.54))] p-4 sm:p-6">
-          <p className="text-[10px] font-semibold tracking-[0.14em] text-[var(--text-faint)] uppercase">
-            Project journey
-          </p>
-          <div className="mt-1 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-[26px] sm:text-[34px] font-semibold text-[var(--text)] tracking-tight">
-                {project.title}
-              </h1>
-              <p className="text-[13px] sm:text-[14px] text-[var(--text-muted)] mt-2 max-w-2xl leading-relaxed">
-                {project.intentStatement || "Built in the open."}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] sm:text-[12px] text-[var(--text-faint)]">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-1">
-                  <span className={`w-1.5 h-1.5 rounded-full ${project.status === "COMPLETED" ? "bg-emerald-400" : project.status === "PAUSED" ? "bg-amber-400" : "bg-sky-400"}`} />
-                  {project.status === "COMPLETED" ? "Complete" : project.status === "PAUSED" ? "Paused" : "In progress"}
-                </span>
-                <span>{updateCount} updates</span>
-                {typeof followers === "number" && <span>{followers} following</span>}
-                <span>{weeks} weeks</span>
-                <button
-                  type="button"
-                  onClick={() => useShellUi.getState().openVault(handle.replace(/^@/, ""))}
-                  className="hover:text-[var(--text)] hover:underline"
-                >
-                  by @{handle}
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 shrink-0">
+
+        {/* Wireframe header */}
+        <header className="mb-6 rounded-xl border border-dashed border-white/25 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 text-[13px] sm:text-[14px] text-white tracking-wide">
+              <span className="font-semibold uppercase">{project.title}</span>
+              <span className="text-white/40"> · By </span>
               <button
                 type="button"
-                onClick={enterWorkRoom}
-                className="rounded-full bg-[var(--coral)] px-4 py-2.5 text-[12px] font-semibold text-white shadow-[0_8px_24px_rgba(255,118,95,.16)] hover:brightness-110"
+                onClick={() => useShellUi.getState().openVault(handle.replace(/^@/, ""))}
+                className="text-white/70 hover:text-white hover:underline"
               >
-                Enter work room
+                @{handle}
               </button>
+              <span className="text-white/40"> · </span>
+              <span className="text-white/55">
+                [Lifecycle: {PHASES[Math.min(activePhase, PHASES.length - 1)] || "Alpha"} Node]
+              </span>
             </div>
+            <button
+              type="button"
+              onClick={() => void toggleProjectFollow()}
+              disabled={followBusy}
+              className="shrink-0 rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50 hover:text-white"
+            >
+              {inCircle ? "Following" : "+ Follow Journey"}
+            </button>
           </div>
+          {followError && <p role="alert" className="mt-2 text-[11px] text-red-300">{followError}</p>}
         </header>
 
-        {/* Lifecycle */}
-        <div className="grid grid-cols-4 gap-1 mb-6">
-          {PHASES.map((label, i) => (
-            <div
-              key={label}
-              className={`rounded-lg border px-2 py-2.5 text-center text-[11px] sm:text-[12px] ${
-                i === activePhase
-                  ? "border-[var(--coral)] text-[var(--text)] bg-[var(--coral)]/10"
-                  : "border-[var(--line)] text-[var(--text-faint)]"
-              }`}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
+        {/* Chronological log entries */}
+        <div className="space-y-5">
+          {logNodes.length === 0 && (
+            <p className="py-16 text-center text-[13px] text-white/40">No log entries yet.</p>
+          )}
+          {logNodes.map((n) => {
+            const tried = parseTried(n.evolutionDelta);
+            const attempts = (n.triedAttempts || []).map((a) => ({
+              kind: a.outcome || "Tried",
+              text: a.detail || "",
+            }));
+            const decisions = attempts.length ? attempts : tried;
+            const media =
+              n.vodUrl ||
+              n.liveUrl ||
+              n.mediaDrops?.[0]?.videoUrl ||
+              n.mediaDrops?.[0]?.imageUrl ||
+              n.nextSnapshotUrl ||
+              n.imageUrls?.[0] ||
+              null;
+            const isVideo = !!(media && /\.(mp4|webm|mov)(\?|$)/i.test(media));
+            const active = selected?.id === n.id;
+            return (
+              <section
+                key={n.id}
+                className={`rounded-xl border border-dashed ${
+                  active ? "border-white/40 bg-white/[0.03]" : "border-white/20"
+                } overflow-hidden`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(n.id)}
+                  className="w-full px-4 py-2.5 text-left text-[12px] sm:text-[13px] text-white/90 border-b border-dashed border-white/15 hover:bg-white/[0.02]"
+                >
+                  <span className="text-white/50">[ LOG #{String(n.position).padStart(3, "0")} ]</span>
+                  <span className="text-white/40"> — </span>
+                  <span>{n.dayLabel || `Update ${n.position}`}</span>
+                  <span className="text-white/40"> · </span>
+                  <span className="font-medium">&ldquo;{n.updateTitle || n.phaseTitle}&rdquo;</span>
+                </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_16.5rem] gap-6">
-          {/* Main */}
-          <div className="min-w-0 space-y-5">
-            {/* Scrubber */}
-            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <p className="text-[12px] text-[var(--text-muted)]">
-                  Update{" "}
-                  <span className="text-[var(--text)] font-medium">
-                    {selected ? selected.position : "—"} of {nodes.length}
-                  </span>
-                </p>
-                <p className="text-[11px] text-[var(--text-faint)]">{selected?.dayLabel}</p>
-              </div>
-              <div className="flex gap-1.5 flex-wrap">
-                {nodes.map((n) => {
-                  const active = selected?.id === n.id;
-                  const setback = n.isSetback || n.updateKind === "DEAD_END";
-                  const prompt = n.promptShared || !!n.promptUsed;
-                  return (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => setSelectedId(n.id)}
-                      className={`relative w-9 h-9 rounded-lg text-[12px] font-medium border ${
-                        active
-                          ? "bg-[var(--coral)] border-[var(--coral)] text-white"
-                          : "border-[var(--line)] text-[var(--text-muted)] hover:border-[var(--line-strong)]"
-                      }`}
-                    >
-                      {n.position}
-                      {setback && (
-                        <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-red-400" />
-                      )}
-                      {prompt && !setback && (
-                        <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-[10px] text-[var(--text-faint)] flex flex-wrap gap-3">
-                <span>
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mr-1" />
-                  Setback
-                </span>
-                <span>
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1" />
-                  Prompt shared
-                </span>
-                <span>Use ← → to move between updates</span>
-              </p>
-            </div>
-
-            {/* Media */}
-            <div className="relative aspect-video rounded-2xl overflow-hidden border border-[var(--line)] bg-[#0c0c0e]">
-              {mediaUrl ? (
-                mediaUrl.includes("youtube") || mediaUrl.includes("twitch") || mediaUrl.includes("embed") ? (
-                  <iframe title="Update media" src={mediaUrl} className="absolute inset-0 w-full h-full border-0" allowFullScreen />
-                ) : (
-                  <video src={mediaUrl} controls className="absolute inset-0 w-full h-full object-cover" />
-                )
-              ) : imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={imageUrl} alt={`Work update: ${selected?.phaseTitle || project.title}`} className="absolute inset-0 w-full h-full object-contain" />
-              ) : (
-                <div className="absolute inset-0 grid place-items-center">
-                  <span className="text-[12px] text-white/40">No media attached to this update</span>
-                </div>
-              )}
-              {mediaUrl && (
-                <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-black/60 to-transparent flex items-end px-3 pb-2">
-                  <input
-                    type="range"
-                    min={0}
-                    max={48}
-                    value={playhead}
-                    onChange={(e) => setPlayhead(Number(e.target.value))}
-                    className="w-full accent-[var(--coral)] h-1"
-                    aria-label="Video update position"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* How I built it */}
-            {selected && (
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 sm:p-5 space-y-5">
-                {(selected.isSetback || selected.updateKind === "DEAD_END") && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-red-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    Setback
-                  </span>
-                )}
-                <div>
-                  <h2 className="text-[18px] font-semibold text-[var(--text)]">{selected.phaseTitle}</h2>
-                  <p className="text-[12px] text-[var(--text-faint)] mt-1">
-                    {selected.dayLabel}
-                    {selected.summaryText ? ` · ${selected.summaryText.slice(0, 80)}` : ""}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-semibold tracking-wider text-[var(--text-faint)] uppercase">Goal</p>
-                  <p className="text-[13px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                    {selected.summaryText || "Ship this stop cleanly."}
-                  </p>
-                </div>
-
-                {tried.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-semibold tracking-wider text-[var(--text-faint)] uppercase mb-2">
-                      What was tried
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-0">
+                  {/* 15s autoplaying canvas / video reel */}
+                  <div className="relative aspect-video bg-[#0a0b0d] border-b md:border-b-0 md:border-r border-dashed border-white/15">
+                    {media ? (
+                      isVideo ? (
+                        <video
+                          src={media}
+                          muted
+                          playsInline
+                          loop
+                          autoPlay={active}
+                          className="absolute inset-0 h-full w-full object-cover"
+                          onMouseEnter={(e) => void e.currentTarget.play().catch(() => {})}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.pause();
+                            e.currentTarget.currentTime = 0;
+                          }}
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={media} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                      )
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center text-[11px] text-white/30 uppercase tracking-wider">
+                        [ 15s autoplaying canvas video reel ]
+                      </div>
+                    )}
+                    <p className="absolute bottom-2 left-2 text-[10px] text-white/40 bg-black/40 px-1.5 py-0.5 rounded">
+                      Hover to scrub or play full VOD
                     </p>
-                    <ul className="space-y-2">
-                      {tried.map((row, i) => (
-                        <li key={i} className="flex gap-3 text-[13px]">
-                          <span className={`shrink-0 w-16 font-medium ${kindColor(row.kind)}`}>{row.kind}</span>
-                          <span className="text-[var(--text-muted)]">{row.text}</span>
+                  </div>
+
+                  {/* Decision log */}
+                  <div className="p-4 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
+                      Decision log
+                    </p>
+                    <ul className="space-y-1.5 text-[12px] text-white/70 leading-relaxed">
+                      <li>
+                        <span className="text-white/40">· Goal: </span>
+                        {n.summaryText || "Ship this stop cleanly."}
+                      </li>
+                      {decisions.map((d, i) => (
+                        <li key={i}>
+                          <span className="text-white/40">· {d.kind}: </span>
+                          {d.text}
                         </li>
                       ))}
+                      {!decisions.length && project.currentState && active && (
+                        <li>
+                          <span className="text-white/40">· Decision: </span>
+                          {project.currentState}
+                        </li>
+                      )}
                     </ul>
-                  </div>
-                )}
-
-                {project.currentState && (
-                  <div>
-                    <p className="text-[10px] font-semibold tracking-wider text-[var(--text-faint)] uppercase">
-                      Decision
-                    </p>
-                    <p className="text-[13px] text-[var(--text-muted)] mt-1 leading-relaxed">
-                      {project.currentState}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-[10px] font-semibold tracking-wider text-[var(--text-faint)] uppercase">
-                    Prompt used
-                  </p>
-                  <div className="mt-1.5 flex gap-2 items-start rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2.5">
-                    <p className="flex-1 text-[12px] text-[var(--text-muted)] font-mono leading-relaxed">
-                      {selected.promptUsed || "No prompt logged on this update."}
-                    </p>
-                    {selected.promptUsed && (
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard?.writeText(selected.promptUsed || "")}
-                        className="shrink-0 text-[10px] text-[var(--text-faint)] hover:text-[var(--text)] border border-[var(--line)] rounded-md px-1.5 py-0.5"
+                    {(n.vodUrl || n.liveUrl) && (
+                      <a
+                        href={n.vodUrl || n.liveUrl || undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block mt-2 text-[11px] text-sky-300/80 hover:text-sky-200 underline"
                       >
-                        Copy
-                      </button>
+                        Open full VOD
+                      </a>
                     )}
                   </div>
                 </div>
-
-                <div>
-                  <p className="text-[10px] font-semibold tracking-wider text-[var(--text-faint)] uppercase mb-1.5">
-                    Tools
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(selected.tools?.length ? selected.tools : ["Figma", "Claude"]).map((tool) => (
-                      <span
-                        key={tool}
-                        className="rounded-full border border-[var(--line)] px-2.5 py-1 text-[11px] text-[var(--text-muted)]"
-                      >
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-1 text-[12px]">
-                  <span className="text-[var(--text-faint)]">Was this useful?</span>
-                  <button
-                    type="button"
-                    onClick={() => setUseful((v) => !v)}
-                    className={`rounded-full border px-3 py-1 ${
-                      useful
-                        ? "border-[var(--coral)] text-[var(--coral)]"
-                        : "border-[var(--line)] text-[var(--text-muted)]"
-                    }`}
-                  >
-                    Useful{useful ? " · you" : " (24)"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTriedIt((v) => !v)}
-                    className={`rounded-full border px-3 py-1 ${
-                      triedIt
-                        ? "border-emerald-500/50 text-emerald-300"
-                        : "border-[var(--line)] text-[var(--text-muted)]"
-                    }`}
-                  >
-                    Tried it{triedIt ? " · you" : " (6)"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Discussion */}
-            <div>
-              <h3 className="text-[14px] font-semibold text-[var(--text)] mb-3">Discussion on this update</h3>
-              <ul className="space-y-3 mb-4">
-                {discussions.map((d) => (
-                  <li key={d.id} className="flex gap-2.5">
-                    <span className="w-7 h-7 rounded-full bg-white/10 grid place-items-center text-[10px] font-bold text-white shrink-0">
-                      {(d.handle || "?")[0].toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-[12px] font-medium text-[var(--text)]">{d.handle}</span>
-                        <button
-                          type="button"
-                          onClick={() => setPlayhead(14)}
-                          className="text-[11px] text-[var(--coral)] hover:underline"
-                        >
-                          {d.timeLabel || "0:00"}
-                        </button>
-                      </div>
-                      <p className="text-[13px] text-[var(--text-muted)] mt-0.5">{d.messageText}</p>
-                    </div>
-                  </li>
-                ))}
-                {discussions.length === 0 && (
-                  <p className="text-[12px] text-[var(--text-faint)]">No comments on this update yet.</p>
-                )}
-              </ul>
-              <div className="flex gap-2">
-                <input
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Comment at the current moment"
-                  className="flex-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--text-faint)] focus:outline-none"
-                  onKeyDown={(e) => e.key === "Enter" && postComment()}
-                />
-                <button
-                  type="button"
-                  disabled={posting || !comment.trim()}
-                  onClick={postComment}
-                  className="rounded-full bg-[var(--coral)] px-4 py-2.5 text-[12px] font-semibold text-white disabled:opacity-40"
-                >
-                  Post at {String(Math.floor(playhead / 60)).padStart(1, "0")}:
-                  {String(playhead % 60).padStart(2, "0")}
-                </button>
-              </div>
-            </div>
-
-            {/* All updates table */}
-            <div>
-              <h3 className="text-[14px] font-semibold text-[var(--text)] mb-3">All updates</h3>
-              <ul className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-2xl overflow-hidden">
-                {[...nodes].reverse().map((n) => (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(n.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.03] ${
-                        selected?.id === n.id ? "bg-white/[0.04]" : ""
-                      }`}
-                    >
-                      <span className="text-[12px] text-[var(--text-faint)] tabular-nums w-6">
-                        {String(n.position).padStart(2, "0")}
-                      </span>
-                      <span className="flex-1 text-[13px] text-[var(--text)] truncate">{n.phaseTitle}</span>
-                      <span className="text-[11px] text-[var(--text-faint)] shrink-0">{n.dayLabel}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Side panel */}
-          <aside className="space-y-3 lg:sticky lg:top-4 self-start">
-            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-              {isOwner ? (
-                <p className="text-[13px] text-[var(--text-muted)]">This is your journey.</p>
-              ) : isGuest ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "follow this project journey" }));
-                    } catch {}
-                    onClose();
-                  }}
-                  className="w-full rounded-full bg-[var(--coral)] py-2.5 text-[13px] font-semibold text-white"
-                >
-                  Sign in to follow
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void toggleProjectFollow()}
-                    disabled={followBusy}
-                    className={`w-full rounded-full py-2.5 text-[13px] font-semibold ${
-                      inCircle
-                        ? "border border-[var(--line)] text-[var(--text)]"
-                        : "bg-[var(--coral)] text-white"
-                    }`}
-                  >
-                    {followBusy ? "Updating…" : inCircle ? "Following · Unfollow" : "Follow this journey"}
-                  </button>
-                  {followError && <p role="alert" className="mt-2 text-[11px] text-red-400">{followError}</p>}
-                  <p className="text-[11px] text-[var(--text-faint)] mt-2 leading-relaxed">
-                    You will see each new update in Circle. Unfollow any time.
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-              <p className="text-[12px] font-semibold text-[var(--text)]">Next working session</p>
-              <p className="text-[12px] text-[var(--text-muted)] mt-1.5 leading-relaxed">
-                {project.nextStep || "Friday build night, 8:00 pm."}
-              </p>
-              <button
-                type="button"
-                onClick={enterWorkRoom}
-                className="mt-3 w-full rounded-full border border-[var(--line)] py-2 text-[12px] text-[var(--text)]"
-              >
-                Step into the work room
-              </button>
-            </div>
-
-            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 space-y-3">
-              <p className="text-[12px] font-semibold text-[var(--text)]">Help wanted</p>
-              {helpLoading && <p className="text-[12px] text-[var(--text-faint)]">Checking for open asks…</p>}
-              {helpItems.length === 0 && !helpLoading && !helpError && <p className="text-[12px] text-[var(--text-faint)]">No open asks on this project.</p>}
-              {helpItems.map((h) => (
-                <div key={h.id} className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[12px] text-[var(--text)]">{h.title}</p>
-                    {h.body && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{h.body}</p>}
-                    {h.tags[0] && <p className="text-[10px] text-[var(--text-faint)]">{h.tags.join(" · ")}</p>}
-                    {h.status === "IN_PROGRESS" && (
-                      <p className="mt-1 text-[10px] text-[var(--growth)]">
-                        {h.claimedByHandle ? `@${h.claimedByHandle} offered to help` : "A builder offered to help"}
-                      </p>
-                    )}
-                  </div>
-                  {h.status === "OPEN" && !isOwner && <button
-                    type="button"
-                    disabled={claimingHelpId === h.id}
-                    onClick={async () => {
-                      if (isGuest) {
-                        window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "offer to help on a project" }));
-                        return;
-                      }
-                      setClaimingHelpId(h.id);
-                      setHelpError("");
-                      try {
-                        const response = await fetch("/api/help", {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ id: h.id, claim: true }),
-                        });
-                        const result = await response.json().catch(() => ({}));
-                        if (!response.ok) throw new Error(result.error || "Could not claim this ask.");
-                        setHelpItems((items) => items.map((item) => item.id === h.id ? result.help as HelpItem : item));
-                        enterWorkRoom();
-                      } catch (error) {
-                        setHelpError(error instanceof Error ? error.message : "Could not claim this ask.");
-                      } finally {
-                        setClaimingHelpId(null);
-                      }
-                    }}
-                    className="text-[11px] text-[var(--coral)] shrink-0 disabled:opacity-50"
-                  >
-                    {claimingHelpId === h.id ? "Offering…" : "Offer help"}
-                  </button>}
-                </div>
-              ))}
-              {isOwner && (
-                <div className="border-t border-[var(--line)] pt-3 space-y-2">
-                  <p className="text-[11px] text-[var(--text-muted)]">Ask the community</p>
-                  <input value={helpTitle} onChange={(event) => setHelpTitle(event.target.value)} maxLength={120} placeholder="What are you stuck on?" className="w-full rounded-lg border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[12px] text-[var(--text)]" />
-                  <textarea value={helpBody} onChange={(event) => setHelpBody(event.target.value)} maxLength={500} rows={2} placeholder="Add context or what you have tried (optional)" className="w-full rounded-lg border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[12px] text-[var(--text)]" />
-                  <button type="button" disabled={helpBusy || helpTitle.trim().length < 3} onClick={() => void postHelpRequest()} className="w-full rounded-full bg-[var(--coral)] py-2 text-[12px] font-semibold text-white disabled:opacity-40">{helpBusy ? "Posting…" : "Post a help request"}</button>
-                </div>
-              )}
-              {helpError && (
-                <div role="alert" className="text-[11px] text-red-400">
-                  <p>{helpError}</p>
-                  <button type="button" onClick={() => void loadHelpRequests()} className="mt-1 text-[var(--coral)] hover:underline">
-                    Try again
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-              <p className="text-[12px] font-semibold text-[var(--text)] mb-2">Contributors</p>
-              <ul className="space-y-2.5">
-                <li className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-full bg-violet-500/80 grid place-items-center text-[10px] font-bold text-white">
-                    {(handle || "M")[0].toUpperCase()}
-                  </span>
-                  <div>
-                    <p className="text-[12px] text-[var(--text)]">{handle}</p>
-                    <p className="text-[10px] text-[var(--text-faint)]">Creator</p>
-                  </div>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-full bg-teal-500/80 grid place-items-center text-[10px] font-bold text-white">
-                    N
-                  </span>
-                  <div>
-                    <p className="text-[12px] text-[var(--text)]">nia</p>
-                    <p className="text-[10px] text-[var(--text-faint)]">Sound design</p>
-                  </div>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-full bg-orange-500/80 grid place-items-center text-[10px] font-bold text-white">
-                    A
-                  </span>
-                  <div>
-                    <p className="text-[12px] text-[var(--text)]">ada</p>
-                    <p className="text-[10px] text-[var(--text-faint)]">Reviewed shaders</p>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </aside>
+              </section>
+            );
+          })}
         </div>
+
+        {/* Owner help request — keep capability, quieter chrome */}
+        {isOwner && (
+          <div className="mt-8 rounded-xl border border-dashed border-white/20 p-4 space-y-3">
+            <p className="text-[11px] uppercase tracking-wider text-white/45">Ask for a hand</p>
+            <input
+              value={helpTitle}
+              onChange={(e) => setHelpTitle(e.target.value)}
+              placeholder="What are you stuck on?"
+              className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-white/30"
+            />
+            <textarea
+              value={helpBody}
+              onChange={(e) => setHelpBody(e.target.value)}
+              rows={2}
+              placeholder="Optional context"
+              className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-white/30"
+            />
+            {helpError && <p role="alert" className="text-[12px] text-red-300">{helpError}</p>}
+            <button
+              type="button"
+              disabled={helpBusy || helpTitle.trim().length < 3}
+              onClick={() => void postHelpRequest()}
+              className="rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 disabled:opacity-40"
+            >
+              {helpBusy ? "Posting…" : "Post help request"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

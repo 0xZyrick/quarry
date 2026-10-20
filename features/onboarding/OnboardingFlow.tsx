@@ -54,7 +54,6 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
   );
   const [handle, setHandle] = useState(data.name?.replace(/^@/, "") || "");
   const [track, setTrack] = useState<Track>(data.track === "client" ? "client" : "creator");
-  const [invite, setInvite] = useState("");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -149,7 +148,7 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(authMode === "join"
-            ? { code: invite.trim(), name: handle.trim(), email: email.trim(), track }
+            ? { name: handle.trim(), email: email.trim(), track }
             : { email: email.trim() }),
         });
         const result = await r.json().catch(() => ({}));
@@ -215,13 +214,13 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
               <button
                 type="button"
                 onClick={() => {
-                  setAuthMode("join");
+                  setAuthMode("signin");
                   setOtpSent(false);
                   setStep("auth");
                 }}
                 className="text-[12px] text-white/55 hover:text-white font-medium"
               >
-                Have an invite? Join
+                Already a member? Sign in
               </button>
             </header>
 
@@ -252,7 +251,7 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
                   }}
                   className="w-full rounded-2xl py-4 text-[13px] font-semibold bg-[var(--coral)] text-[#170b09] shadow-[0_10px_35px_rgba(255,118,95,.18)] hover:brightness-110"
                 >
-                  Join with an invite <span aria-hidden>↗</span>
+                  Create an account <span aria-hidden>↗</span>
                 </button>
                 <button
                   type="button"
@@ -315,7 +314,7 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
                 {otpSent
                   ? `Enter the one-time code sent to ${email}.`
                   : authMode === "join"
-                    ? "Create your account with an invite and verify your email."
+                    ? "Choose a handle and verify your email to create an account."
                     : "We’ll email you a one-time sign-in code."}
               </p>
 
@@ -403,18 +402,6 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
                 />
               </label>
 
-              {!otpSent && authMode === "join" && <label className="mt-4 block">
-                <span className="text-[10px] uppercase tracking-wider text-white/35">
-                  Invite code
-                </span>
-                <input
-                  value={invite}
-                  onChange={(e) => setInvite(e.target.value)}
-                  required
-                  className="mt-1.5 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none"
-                  placeholder="Your invitation code"
-                />
-              </label>}
 
               {otpSent && <label className="mt-4 block">
                 <span className="text-[10px] uppercase tracking-wider text-white/35">One-time code</span>
@@ -436,7 +423,7 @@ export default function OnboardingFlow({ onFinished }: { onFinished?: () => void
                 onClick={() => setAuthMode(authMode === "join" ? "signin" : "join")}
                 className="mt-4 w-full text-[12px] text-white/50 hover:text-white"
               >
-                {authMode === "join" ? "Already have an account? Sign in" : "New to Wippo? Join with an invite"}
+                {authMode === "join" ? "Already have an account? Sign in" : "New to Wippo? Create an account"}
               </button>}
 
               <button

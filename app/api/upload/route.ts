@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getSupabaseAdmin, MEDIA_BUCKET } from "@/lib/supabaseAdmin";
+import { unlockedStudioSession } from "@/lib/server/studioAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ const MAX_BYTES = 40 * 1024 * 1024;
  * Falls back to local public/uploads only if Supabase env is missing (local dev).
  */
 export async function POST(req: NextRequest) {
+  if (!(await unlockedStudioSession(req))) {
+    return NextResponse.json({ error: "Unlock Studio before uploading media." }, { status: 403 });
+  }
   try {
     const form = await req.formData();
     const file = form.get("file");

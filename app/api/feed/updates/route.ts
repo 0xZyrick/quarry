@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
         handle: n.project.creator.handle || n.project.creator.id.slice(0, 8),
         creatorId: n.project.creator.id,
         phaseTitle: n.phaseTitle,
+        updateTitle: n.updateTitle,
         dayLabel: n.dayLabel,
         summary: n.summaryText,
         evolutionDelta: n.evolutionDelta,

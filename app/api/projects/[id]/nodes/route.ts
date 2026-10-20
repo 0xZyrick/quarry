@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/db";
 import { validateDrop } from "@/lib/guardrails";
 import { detectPlatform, parseStreamUrl } from "@/lib/streamEmbed";
+import { unlockedStudioSession } from "@/lib/server/studioAccess";
+import { readSession } from "@/lib/server/session";
 
 
 const MAX_IMAGES = 3;
@@ -11,10 +13,13 @@ const MAX_IMAGES = 3;
  * Evidence: liveUrl and/or images and/or short video. summaryText required.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await unlockedStudioSession(req);
+  if (!session) return NextResponse.json({ error: "Unlock Studio before posting an update." }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const {
     dayLabel,
     phaseTitle,
+    updateTitle,
     summaryText,
     evolutionDelta,
     prevSnapshotUrl,
@@ -86,14 +91,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     select: {
       id: true,
+      creatorId: true,
       journeyNodes: { select: { position: true }, orderBy: { position: "desc" }, take: 1 },
     },
   });
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (project.creatorId !== session.uid) {
+    return NextResponse.json({ error: "You can only post to your own project." }, { status: 403 });
+  }
 
   const nextPos = (project.journeyNodes[0]?.position ?? 0) + 1;
   const label =
-    (dayLabel && String(dayLabel).trim()) || `UPDATE ${String(nextPos).padStart(2, "0")}`;
+    (dayLabel && String(dayLabel).trim()) || `UPDATE #${String(nextPos).padStart(3, "0")}`;
   const phase =
     (phaseTitle && String(phaseTitle).trim()) ||
     (hasLive ? "LIVE" : hasShort ? "SHORT" : "PROGRESS");
@@ -107,6 +116,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       position: nextPos,
       dayLabel: label,
       phaseTitle: phase,
+      updateTitle: typeof updateTitle === "string" && updateTitle.trim()
+        ? updateTitle.trim().slice(0, 120)
+        : null,
       summaryText: summaryText.trim(),
       evolutionDelta: evolutionDelta ? String(evolutionDelta).trim() : `domain:${guard.domain}`,
       prevSnapshotUrl: hasPair ? prevSnapshotUrl : imageUrls[0] || null,
@@ -175,6 +187,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
 /** PATCH — end live on a node; optional vodUrl */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = readSession(req);
+  if (!session) return NextResponse.json({ error: "Sign in to end a session." }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const { nodeId, vodUrl, endSession } = body;
   if (!nodeId || typeof nodeId !== "string") {
@@ -185,6 +199,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: nodeId, projectId: params.id },
   });
   if (!node) return NextResponse.json({ error: "Node not found" }, { status: 404 });
+  const project = await prisma.project.findUnique({
+    where: { id: params.id },
+    select: { creatorId: true },
+  });
+  if (project?.creatorId !== session.uid) {
+    return NextResponse.json({ error: "Only the project creator can end this session." }, { status: 403 });
+  }
 
   const data: Record<string, unknown> = {};
   if (endSession) data.sessionEndedAt = new Date();

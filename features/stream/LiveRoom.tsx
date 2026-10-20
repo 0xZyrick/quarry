@@ -12,6 +12,7 @@ import { isInCircle, currentUid } from "@/lib/circle";
 import { useShellUi } from "@/lib/shellUi";
 import { parseStreamUrl } from "@/lib/streamEmbed";
 import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
+import SocialExportCard, { type ExportCardData } from "@/features/project/SocialExportCard";
 
 type RailTab = "chat" | "work" | "about";
 
@@ -34,6 +35,7 @@ type ProjectPayload = {
     id: string;
     position: number;
     dayLabel: string;
+    updateTitle?: string | null;
     phaseTitle: string;
     summaryText: string;
     evolutionDelta?: string | null;
@@ -42,8 +44,17 @@ type ProjectPayload = {
     sessionEndedAt?: string | null;
     nextSnapshotUrl?: string | null;
     prevSnapshotUrl?: string | null;
-    mediaDrops?: { imageUrl?: string | null; nextSnapshotUrl?: string | null; prevSnapshotUrl?: string | null }[];
+    imageUrls?: string[];
+    mediaDrops?: { videoUrl?: string | null; imageUrl?: string | null; nextSnapshotUrl?: string | null; prevSnapshotUrl?: string | null }[];
   }[];
+};
+
+type ActiveSession = {
+  id: string;
+  creatorId: string;
+  title: string;
+  liveUrl?: string | null;
+  journeyNodeId?: string | null;
 };
 
 type HelpRequest = {
@@ -71,12 +82,19 @@ function stepsFromProject(p: ProjectPayload | null): JourneyStep[] {
 
 export default function LiveRoom() {
   const { layer, roomId, setLayer } = useGuild();
-  const { signedIn, ready } = useOnboarding();
+  const { signedIn, ready, requireAuth } = useOnboarding();
   const sec = useRoomSecurity();
   const meta = useHubs((s) => s.meta[roomId]);
   const node = NODES.find((n) => n.id === roomId) ?? NODES[0];
 
   const [project, setProject] = useState<ProjectPayload | null>(null);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [endingSessionId, setEndingSessionId] = useState<string | null>(null);
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const [vodUrlInput, setVodUrlInput] = useState("");
+  const [endSessionError, setEndSessionError] = useState("");
+  const [endSessionBusy, setEndSessionBusy] = useState(false);
+  const [exportCard, setExportCard] = useState<ExportCardData | null>(null);
   const [projectLoading, setProjectLoading] = useState(false);
   const [projectError, setProjectError] = useState("");
   const [sendError, setSendError] = useState("");
@@ -93,8 +111,9 @@ export default function LiveRoom() {
 
   const hostName =
     project?.creator?.handle || meta?.handle || node?.name || "host";
-  const title =
-    project?.title || meta?.title || cardLine(node) || "Live project";
+  const projectTitle = project?.title || meta?.title || cardLine(node) || "Live project";
+  const latestProjectNode = project?.journeyNodes?.[project.journeyNodes.length - 1];
+  const title = latestProjectNode?.updateTitle || activeSession?.title || projectTitle;
   const statusLine =
     project?.currentState ||
     project?.nextStep ||
@@ -132,6 +151,11 @@ export default function LiveRoom() {
     const nodes = project?.journeyNodes || [];
     const withVod = [...nodes].reverse().find((n) => n.vodUrl);
     return withVod?.vodUrl || null;
+  }, [project]);
+  const replayMediaUrl = useMemo(() => {
+    const nodes = project?.journeyNodes || [];
+    const withVideo = [...nodes].reverse().find((n) => n.mediaDrops?.some((drop) => drop.videoUrl));
+    return withVideo?.mediaDrops?.find((drop) => drop.videoUrl)?.videoUrl || null;
   }, [project]);
 
   const [peerCount, setPeerCount] = useState(0);
@@ -202,8 +226,8 @@ export default function LiveRoom() {
   }, [roomId, joined, signedIn]);
 
   const toggleRoomPresence = async () => {
-    if (!signedIn) {
-      window.dispatchEvent(new CustomEvent("wippo:auth"));
+    if (!currentUid()) {
+      requireAuth("join the room", () => void toggleRoomPresence());
       return;
     }
     if (!roomId || presenceBusy) return;
@@ -264,6 +288,32 @@ export default function LiveRoom() {
       });
     return () => {
       cancelled = true;
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    let cancelled = false;
+    const loadActiveSession = async () => {
+      try {
+        const response = await fetch(`/api/sessions?roomId=${encodeURIComponent(roomId)}`);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Could not load the live session.");
+        const session = Array.isArray(result.sessions) ? result.sessions[0] : null;
+        if (!cancelled) {
+          setActiveSession(session?.id ? session as ActiveSession : null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setProjectError(error instanceof Error ? error.message : "Could not load the live session.");
+        }
+      }
+    };
+    void loadActiveSession();
+    const timer = window.setInterval(loadActiveSession, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
     };
   }, [roomId]);
 
@@ -330,7 +380,8 @@ export default function LiveRoom() {
   }, [project?.id]);
 
   useEffect(() => {
-    connectChat(roomId);
+    if (!roomId) return;
+    return connectChat(roomId);
   }, [roomId]);
 
   useEffect(() => {
@@ -355,8 +406,8 @@ export default function LiveRoom() {
   const send = async () => {
     const body = text.trim();
     if (body.length < 1) return;
-    if (!signedIn) {
-      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "join the room conversation" }));
+    if (!currentUid()) {
+      requireAuth("join the room conversation", () => void send());
       return;
     }
     setSendError("");
@@ -392,8 +443,8 @@ export default function LiveRoom() {
   };
 
   const claimHelpRequest = async (helpId: string) => {
-    if (!signedIn) {
-      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "offer to help on this project" }));
+    if (!currentUid()) {
+      requireAuth("offer to help on this project", () => void claimHelpRequest(helpId));
       return;
     }
     setClaimingHelpId(helpId);
@@ -416,14 +467,14 @@ export default function LiveRoom() {
   };
 
   const onCircle = async () => {
-    if (!signedIn) {
-      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "follow a project journey" }));
+    if (!currentUid()) {
+      requireAuth("follow a project journey", () => void onCircle());
       return;
     }
     const projectId = project?.id || roomId;
     const userId = currentUid();
     if (!userId) {
-      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "follow a project journey" }));
+      requireAuth("follow a project journey", () => void onCircle());
       return;
     }
     setFollowError("");
@@ -439,6 +490,58 @@ export default function LiveRoom() {
       if (typeof result.followerCount === "number") setProjectFollowerCount(result.followerCount);
     } catch (error) {
       setFollowError(error instanceof Error ? error.message : "Could not update this follow.");
+    }
+  };
+
+  const endLiveSession = async () => {
+    const sessionId = endingSessionId || activeSession?.id;
+    if (!sessionId || endSessionBusy) return;
+    const vodUrl = vodUrlInput.trim();
+    if (vodUrl && !/^https?:\/\//i.test(vodUrl)) {
+      setEndSessionError("Paste a full VOD URL.");
+      return;
+    }
+    setEndSessionBusy(true);
+    setEndSessionError("");
+    try {
+      const response = await fetch("/api/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, ...(vodUrl ? { vodUrl } : {}) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not end the live session.");
+      setActiveSession(null);
+      const updatedNode = result.node as NonNullable<ProjectPayload["journeyNodes"]>[number] | null;
+      if (updatedNode?.id) {
+        setProject((current) => current ? {
+          ...current,
+          journeyNodes: current.journeyNodes?.map((item) =>
+            item.id === updatedNode.id ? { ...item, ...updatedNode } : item
+          ),
+        } : current);
+      }
+      if (!result.vodUrl) {
+        setEndSessionError("Session ended. We couldn't locate the stream VOD automatically; paste its replay link to attach it.");
+        return;
+      }
+      const update = updatedNode || latestProjectNode;
+      setExportCard({
+        projectId: project?.id || roomId,
+        projectName: projectTitle,
+        title: update?.updateTitle || activeSession?.title || projectTitle,
+        summary: update?.summaryText || project?.currentState || "Live work session",
+        updateNumber: update?.position || 1,
+        phase: update?.phaseTitle || "Prototype",
+        handle: hostName.replace(/^@/, ""),
+      });
+      setEndSessionOpen(false);
+      setEndingSessionId(null);
+      setVodUrlInput("");
+    } catch (error) {
+      setEndSessionError(error instanceof Error ? error.message : "Could not end the live session.");
+    } finally {
+      setEndSessionBusy(false);
     }
   };
 
@@ -465,23 +568,35 @@ export default function LiveRoom() {
               {title}
             </button>
             <span className="rounded-full border border-white/[0.09] bg-white/[0.04] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/55">
-              {sec.kind === "owner-creator" ? "Your room" : sec.kind === "client-owner" ? "Project owner" : sec.kind === "co-creator" ? "Crew" : "Visitor"}
+              {sec.kind === "owner-creator" || sec.kind === "client-owner"
+                ? "Host"
+                : sec.kind === "co-creator"
+                  ? "At table"
+                  : "Watching"}
             </span>
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${
               activeLiveUrl
-                ? "border-[var(--coral)]/70 bg-[var(--coral)]/10 text-[var(--coral)]"
+                ? "border-[#10B981]/50 bg-[#10B981]/10 text-[#6ee7b7]"
                 : "border-white/[0.09] bg-white/[0.04] text-white/55"
             }`}>
               {activeLiveUrl && (
                 <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inset-0 rounded-full bg-[var(--coral)] animate-ping opacity-50" />
-                  <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--coral)]" />
+                  <span className="absolute inset-0 rounded-full bg-[#10B981] animate-ping opacity-50" />
+                  <span className="relative h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                 </span>
               )}
-              {activeLiveUrl ? "Live session" : "Work room"}
+              {activeLiveUrl ? "Update stream" : "Project room"}
             </span>
           </div>
           <p className="text-[11px] text-[var(--text-faint)] truncate">
+            <button
+              type="button"
+              onClick={() => useShellUi.getState().openProject(roomId)}
+              className="mr-1 hover:text-[var(--text)] hover:underline"
+            >
+              {projectTitle}
+            </button>
+            ·{" "}
             {sec.kind === "owner-creator" ? "You're hosting" : sec.kind === "client-owner" ? "Your project, with" : sec.kind === "co-creator" ? "Building together with" : "Working alongside"}{" "}
             <button
               type="button"
@@ -494,34 +609,67 @@ export default function LiveRoom() {
             {currentStep ? ` · ${currentStep.label}` : ""}
           </p>
         </div>
-        <div className="col-span-2 flex items-center justify-end gap-1.5 sm:ml-auto sm:shrink-0">
-          <button
-            type="button"
-            onClick={onCircle}
-            className={`rounded-full border px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium ${
-              inCircle
-                ? "border-white/20 bg-white/10 text-[var(--text)]"
-                : "border-[var(--line)] text-[var(--text-muted)] hover:text-[var(--text)]"
-            }`}
-          >
-            <span className="sm:hidden">{inCircle ? "Following" : "+ Follow"}</span>
-            <span className="hidden sm:inline">{inCircle ? "Following journey" : "+ Follow journey"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void toggleRoomPresence()}
-            disabled={presenceBusy}
-            className="rounded-full bg-[var(--coral)] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
-          >
-            <span className="sm:hidden">{presenceBusy ? "…" : shortJoinLabel}</span>
-            <span className="hidden sm:inline">{presenceBusy ? "Connecting…" : joinLabel}</span>
-          </button>
+        <div className="col-span-2 flex items-center justify-end gap-1.5 sm:ml-auto sm:shrink-0 flex-wrap">
+          {isProjectOwner ? (
+            <>
+              <button
+                type="button"
+                onClick={() => useShellUi.getState().openProject(roomId)}
+                className="rounded-full border border-[var(--line)] px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                Edit about
+              </button>
+              <button
+                type="button"
+                onClick={() => useShellUi.getState().openProject(roomId)}
+                className="rounded-full border border-[var(--line)] px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                <span className="sm:hidden">Edit update</span>
+                <span className="hidden sm:inline">Edit update info</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("work");
+                  requestAnimationFrame(() => document.getElementById("room-help-title")?.focus());
+                }}
+                className="rounded-full bg-[var(--coral)] px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white hover:opacity-90"
+              >
+                <span className="sm:hidden">Need a hand</span>
+                <span className="hidden sm:inline">Need a hand</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onCircle}
+                className={`rounded-full border px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-medium ${
+                  inCircle
+                    ? "border-white/20 bg-white/10 text-[var(--text)]"
+                    : "border-[var(--line)] text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                <span className="sm:hidden">{inCircle ? "Following" : "+ Follow"}</span>
+                <span className="hidden sm:inline">{inCircle ? "Following journey" : "+ Follow journey"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void toggleRoomPresence()}
+                disabled={presenceBusy}
+                className="rounded-full bg-[var(--coral)] px-3 py-1.5 text-[10px] sm:text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              >
+                <span className="sm:hidden">{presenceBusy ? "…" : shortJoinLabel}</span>
+                <span className="hidden sm:inline">{presenceBusy ? "Connecting…" : joinLabel}</span>
+              </button>
+            </>
+          )}
         </div>
       </header>
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
         <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto px-3 sm:px-4 py-3 gap-3">
-          <div className="relative w-full rounded-2xl overflow-hidden border border-[var(--line)] bg-[var(--surface)] aspect-video">
+          <div className="relative w-full flex-1 min-h-[14rem] lg:min-h-0 rounded-2xl overflow-hidden border border-white/[0.06] bg-[#0a0b0d] aspect-video lg:aspect-auto">
               {embed?.embedUrl ? (
                 <iframe
                   title="Live session"
@@ -530,6 +678,13 @@ export default function LiveRoom() {
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                   allowFullScreen
                 />
+              ) : replayMediaUrl ? (
+                <video
+                  src={replayMediaUrl}
+                  controls
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-contain"
+                />
               ) : previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={previewUrl} alt={`Latest work on ${title}`} className="absolute inset-0 h-full w-full object-cover" />
@@ -537,18 +692,31 @@ export default function LiveRoom() {
                 <div className="absolute inset-0 grid place-items-center bg-[var(--surface)] px-6 text-center">
                   <p role={projectError ? "alert" : undefined} className={`max-w-xs text-[13px] ${projectError ? "text-red-400" : "text-[var(--text-muted)]"}`}>
                     {projectLoading
-                      ? "Opening the project room…"
+                      ? "Loading update stage…"
                       : projectError
                         ? projectError
                         : activeLiveUrl
                           ? "The live stream could not be embedded. Open the project journey to view its latest work."
-                          : "No stream or project image has been added yet."}
+                          : "No Twitch/YouTube link or reel on this update yet. Host can attach one on the journey."}
                   </p>
                 </div>
               )}
               <span className="absolute left-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white z-10">
                 {peerCount} here now
               </span>
+              {activeSession?.creatorId === currentUid() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEndingSessionId(activeSession.id);
+                    setEndSessionOpen(true);
+                    setEndSessionError("");
+                  }}
+                  className="absolute right-3 top-3 z-20 rounded-full bg-red-600 px-3 py-1.5 text-[10px] font-semibold text-white hover:bg-red-500"
+                >
+                  End Session
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -827,8 +995,8 @@ export default function LiveRoom() {
           )}
 
           {tab === "about" && (
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 text-[13px]">
-              <button type="button" onClick={() => useShellUi.getState().openProject(roomId)} className="font-semibold text-[var(--text)] text-left hover:underline">{title}</button>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 text-[13px]">
+              <p className="font-semibold text-[var(--text)]">{title}</p>
               <p className="text-[13px] text-[var(--text-muted)] leading-relaxed">
                 {project?.intentStatement ||
                   `Live workshop with @${hostName}. Progress is saved as milestones on the project journey — not lost in a stream archive.`}
@@ -836,16 +1004,9 @@ export default function LiveRoom() {
               <button
                 type="button"
                 onClick={() => useShellUi.getState().openProject(roomId)}
-                className="mt-3 w-full rounded-full border border-[var(--line)] py-2 text-[12px] font-medium text-[var(--text)] hover:bg-white/[0.04]"
+                className="mt-1 w-full rounded-full border border-[var(--line)] py-2 text-[12px] font-medium text-[var(--text)] hover:bg-white/[0.04]"
               >
-                Open project world
-              </button>
-              <button
-                type="button"
-                onClick={() => useShellUi.getState().openProject(roomId)}
-                className="text-[12px] text-[var(--coral)] pt-2 hover:underline"
-              >
-                Open this update in the project journey
+                Open project journey
               </button>
               {projectFollowerCount !== null && (
                 <p className="text-[12px] text-[var(--text-faint)]">{projectFollowerCount} following this journey</p>
@@ -854,6 +1015,36 @@ export default function LiveRoom() {
           )}
         </aside>
       </div>
+      {endSessionOpen && (
+        <div className="fixed inset-0 z-[85] grid place-items-center bg-black/70 px-4 py-6">
+          <section role="dialog" aria-modal="true" aria-labelledby="end-session-title" className="w-full max-w-md rounded-2xl border border-white/15 bg-[#111318] p-5">
+            <h2 id="end-session-title" className="text-[16px] font-semibold text-white">End session</h2>
+            <p className="mt-1 text-[12px] text-white/55">
+              Wippo will try to find the stream replay and attach it to this journey update.
+            </p>
+            <label className="mt-4 block text-[11px] text-white/60">
+              Replay link, if you have it
+              <input
+                type="url"
+                value={vodUrlInput}
+                onChange={(event) => setVodUrlInput(event.target.value)}
+                placeholder="Paste a Twitch or YouTube VOD link"
+                className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-3 text-[12px] text-white placeholder:text-white/35"
+              />
+            </label>
+            {endSessionError && <p role="alert" className="mt-3 text-[12px] text-amber-200">{endSessionError}</p>}
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={() => { setEndSessionOpen(false); setEndingSessionId(null); }} className="flex-1 rounded-full border border-white/15 py-2.5 text-[12px] text-white/70">
+                Keep working
+              </button>
+              <button type="button" disabled={endSessionBusy} onClick={() => void endLiveSession()} className="flex-1 rounded-full bg-red-600 py-2.5 text-[12px] font-semibold text-white disabled:opacity-50">
+                {endSessionBusy ? "Ending…" : endSessionError.startsWith("Session ended.") ? "Save replay link" : "End Session"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {exportCard && <SocialExportCard data={exportCard} onClose={() => setExportCard(null)} />}
     </div>
   );
 }

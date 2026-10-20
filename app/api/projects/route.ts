@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/server/db";
+import { PrismaClient } from "@prisma/client";
 import { isMissingSchemaError, MISSING_COLLABORATION_SCHEMA } from "@/lib/server/prismaErrors";
+import { unlockedStudioSession } from "@/lib/server/studioAccess";
 
+const prisma = new PrismaClient();
 
 /**
  * GET — Discover mosaic (hides empty projects) or creator list (includes empty).
@@ -15,15 +17,17 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") ?? "IN_PROGRESS";
     const creatorId = searchParams.get("creatorId");
 
+    // Discover: public projects (include brand-new ones with no journey nodes yet).
+    // Creator list: that creator's projects only.
     const projects = await prisma.project.findMany({
       where: {
         status: status as any,
-        ...(creatorId ? { creatorId } : {}),
-        // Discover only: skip projects with zero updates
-        ...(!creatorId ? { journeyNodes: { some: {} } } : {}),
+        ...(creatorId
+          ? { creatorId }
+          : { visibility: { in: ["PUBLIC", "CIRCLE"] as any } }),
       },
       include: {
-        creator: { select: { id: true, handle: true, levelTrack: true } },
+        creator: { select: { id: true, handle: true, levelTrack: true, displayName: true } },
         journeyNodes: {
           orderBy: { position: "desc" },
           take: 1,
@@ -62,6 +66,7 @@ export async function GET(req: NextRequest) {
         latestNode: latest
           ? {
               dayLabel: latest.dayLabel,
+              updateTitle: latest.updateTitle,
               phaseTitle: latest.phaseTitle,
               summary: latest.summaryText,
               evolutionDelta: (latest as any).evolutionDelta ?? null,
@@ -91,13 +96,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await unlockedStudioSession(req);
+  if (!session) return NextResponse.json({ error: "Unlock Studio before creating a project." }, { status: 403 });
   try {
     const body = await req.json();
     const { creatorId, handle, title, intentStatement, status, visibility, currentState, displayName, zoneId, coverImageUrl } =
       body;
 
-    if (!creatorId || typeof creatorId !== "string") {
-      return NextResponse.json({ error: "creatorId required" }, { status: 400 });
+    if (creatorId !== session.uid) {
+      return NextResponse.json({ error: "You can only create projects for your account." }, { status: 403 });
     }
     if (!title || typeof title !== "string" || title.trim().length < 2) {
       return NextResponse.json({ error: "title required" }, { status: 400 });

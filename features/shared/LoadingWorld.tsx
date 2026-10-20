@@ -12,34 +12,27 @@ export default function LoadingWorld({ overlay = false }: { overlay?: boolean })
       }`}
     >
       <motion.div
-        initial={{ opacity: 0.2, scale: 0.96 }}
+        initial={{ opacity: 0.25, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
-        className="flex flex-col items-center gap-4"
+        className="flex flex-col items-center gap-5"
       >
-        <div className="relative grid h-16 w-16 place-items-center">
-          <motion.span
-            aria-hidden="true"
-            className="absolute inset-0 rounded-[1.35rem] border border-[var(--growth)]/25"
-            animate={{ rotate: 180, scale: [0.9, 1.08, 0.9] }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+        <motion.div
+          className="relative h-14 w-14 sm:h-16 sm:w-16"
+          animate={{ opacity: [0.85, 1, 0.85], scale: [0.98, 1.02, 0.98] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/wippo-icon.png"
+            alt=""
+            className="h-full w-full object-contain"
           />
-          <motion.span
-            aria-hidden="true"
-            className="absolute inset-2 rounded-full border-t-2 border-r-2 border-[var(--coral)]"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
-          />
-          <motion.span
-            aria-hidden="true"
-            className="absolute inset-[10px] rounded-full bg-[var(--coral)]/10"
-            animate={{ opacity: [0.1, 0.4, 0.1] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <span className="text-[17px] font-semibold tracking-[-0.08em] text-[var(--text)]">w.</span>
-        </div>
+        </motion.div>
         <div className="text-center">
-          <p className="text-[12px] font-medium tracking-[0.12em] text-[var(--text)] uppercase">Finding the work</p>
+          <p className="text-[12px] font-medium tracking-[0.12em] text-[var(--text)] uppercase">
+            Finding the work
+          </p>
           <p className="mt-1 text-[10px] text-[var(--text-faint)]">Setting the table…</p>
         </div>
         <span className="sr-only">Loading your workspace</span>

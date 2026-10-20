@@ -1,10 +1,17 @@
+/**
+ * Shared Prisma client for server code.
+ * One instance per process (avoids exhausting connections on serverless warm starts).
+ */
 import { PrismaClient } from "@prisma/client";
 
-// One shared PrismaClient for the whole app.
-// In dev, Next.js hot-reloads modules, so we cache the client on globalThis
-// to avoid opening a new connection pool on every reload.
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const g = globalThis as unknown as { __quarryPrisma?: PrismaClient };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+export const prisma: PrismaClient =
+  g.__quarryPrisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+  });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") {
+  g.__quarryPrisma = prisma;
+}

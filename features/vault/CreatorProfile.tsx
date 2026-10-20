@@ -33,6 +33,7 @@ type JourneyCard = {
 type ProfileView = {
   handle: string;
   displayName: string;
+  avatarUrl?: string | null;
   roleLine: string;
   bio: string;
   openToCollab: boolean;
@@ -159,10 +160,26 @@ export default function CreatorProfile({
         if (cancelled) return;
         const p = d.profile || d;
         if (!p?.handle && !p?.id) {
-          setProfile(demoProfile(handle, !!isSelf));
+          // No row yet — empty self profile, not demo fiction
+          const h = handle.replace(/^@/, "") || "you";
+          setProfile({
+            handle: h,
+            displayName: h,
+            roleLine: "",
+            bio: "",
+            openToCollab: true,
+            journeyCount: 0,
+            recordLine: "",
+            activityWeeks: Array(12).fill(false),
+            thinking: [],
+            skills: [],
+            vouch: { quote: "", by: "", context: "" },
+            helped: [],
+            journeys: [],
+            isSelf: !!isSelf,
+          });
           return;
         }
-        const base = demoProfile(p.handle || handle, !!p.isSelf || !!isSelf);
         const thinking = (p.thinking || []).map((item: any) => ({
           id: item.id,
           kind: item.kind as ThinkingItem["kind"],
@@ -172,36 +189,54 @@ export default function CreatorProfile({
           body: item.body,
         }));
         setProfile({
-          ...base,
           handle: p.handle || handle,
           displayName: p.displayName || p.handle || handle,
-          bio: p.bio || base.bio,
-          journeyCount: p.counts?.projects ?? p.projectCount ?? p.projects?.length ?? base.journeyCount,
-          recordLine: p.recordLine || base.recordLine,
-          activityWeeks: Array.isArray(p.activityWeeks) && p.activityWeeks.length === 12
+          avatarUrl: typeof p.avatarUrl === "string" ? p.avatarUrl : null,
+          roleLine: p.roleLine || p.levelTrack || "",
+          bio: typeof p.bio === "string" ? p.bio : "",
+          openToCollab: p.openToCollab !== false,
+          journeyCount: p.counts?.projects ?? p.projectCount ?? p.projects?.length ?? 0,
+          recordLine: p.recordLine || "",
+          activityWeeks: Array.isArray(p.activityWeeks) && p.activityWeeks.length
             ? p.activityWeeks
-            : base.activityWeeks,
-          thinking: thinking.length ? thinking : base.thinking,
-          skills: (p.skills && p.skills.length ? p.skills : base.skills) as string[],
-          helped: (p.helped && p.helped.length
-            ? p.helped.map((h: any) => ({ who: h.who, what: h.what }))
-            : base.helped),
-          journeys:
-            (p.projects || []).map((pr: any) => ({
-              id: pr.id,
-              title: pr.title,
-              phase: pr.status === "COMPLETED" ? "Done" : "In progress",
-              blurb: pr.intent || "",
-              latest: pr.latest || "Open the journey",
-              following: pr.followerCount || 0,
-              cover: pr.cover || null,
-              openDecision: false,
-            })) || base.journeys,
+            : Array(12).fill(false),
+          thinking,
+          skills: (p.skills && p.skills.length ? p.skills : []) as string[],
+          vouch: p.vouch || { quote: "", by: "", context: "" },
+          helped: (p.helped || []).map((h: any) => ({ who: h.who, what: h.what })),
+          journeys: (p.projects || []).map((pr: any) => ({
+            id: pr.id,
+            title: pr.title,
+            phase: pr.status === "COMPLETED" ? "Done" : "In progress",
+            blurb: pr.intent || pr.intentStatement || "",
+            latest: pr.latest || "Open",
+            following: pr.followerCount || 0,
+            cover: pr.cover || pr.coverImageUrl || null,
+            openDecision: false,
+          })),
           isSelf: !!p.isSelf || !!isSelf,
         });
       })
       .catch(() => {
-        if (!cancelled) setProfile(demoProfile(handle, !!isSelf));
+        if (!cancelled) {
+          const h = handle.replace(/^@/, "") || "you";
+          setProfile({
+            handle: h,
+            displayName: h,
+            roleLine: "",
+            bio: "",
+            openToCollab: true,
+            journeyCount: 0,
+            recordLine: "",
+            activityWeeks: Array(12).fill(false),
+            thinking: [],
+            skills: [],
+            vouch: { quote: "", by: "", context: "" },
+            helped: [],
+            journeys: [],
+            isSelf: !!isSelf,
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -277,259 +312,271 @@ export default function CreatorProfile({
     );
   }
 
+  const focusHours = profile.activityWeeks.filter(Boolean).length * 4;
+
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-[var(--page)] z-50">
-      <div className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--page)]/95 backdrop-blur-md px-3 sm:px-6 py-2.5 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={close}
-          className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"
-        >
+    <div className="absolute inset-0 overflow-y-auto bg-[#0B0C0E] z-50">
+      <div className="sticky top-0 z-20 border-b border-white/10 bg-[#0B0C0E]/95 backdrop-blur-md px-3 sm:px-6 py-2.5 flex items-center gap-2">
+        <button type="button" onClick={close} className="text-[12px] text-white/50 hover:text-white">
           ← Back
         </button>
-        <span className="text-[12px] text-[var(--text-faint)] truncate">@{profile.handle}</span>
+        <span className="text-[12px] text-white/35 truncate">@{profile.handle}</span>
       </div>
 
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 pt-6 pb-24 space-y-8">
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-start gap-4">
-          <div className="relative shrink-0">
-            <Avatar handle={profile.handle} size={64} className="shrink-0" />
-            {profile.isSelf && (
-              <label className="absolute inset-0 rounded-full cursor-pointer grid place-items-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity text-[10px] text-white font-medium">
-                Photo
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    // local preview via object URL; persist when upload API exists
-                    const url = URL.createObjectURL(file);
-                    setProfile((p) => (p ? { ...p, avatarPreview: url } as any : p));
-                    try {
-                      const uid = currentUid();
-                      if (!uid) return;
-                      // data URL fallback store in profile PATCH if small
-                      const reader = new FileReader();
-                      reader.onload = async () => {
-                        const dataUrl = String(reader.result || "");
-                        if (dataUrl.length > 500_000) return; // skip huge
-                        await fetch("/api/profile", {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ userId: uid, avatarUrl: dataUrl }),
-                        });
-                      };
-                      reader.readAsDataURL(file);
-                    } catch {}
-                  }}
-                />
-              </label>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-start gap-2 justify-between">
-              <div>
-                <h1 className="text-[22px] font-semibold text-[var(--text)]">{profile.displayName}</h1>
-                <p className="text-[13px] text-[var(--text-muted)]">{profile.roleLine}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-faint)]">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6 pb-24 font-mono">
+        {/* Wireframe identity block */}
+        <header className="rounded-xl border border-dashed border-white/25 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <Avatar handle={profile.handle} size={56} src={profile.avatarUrl} className="shrink-0" />
+                {profile.isSelf && (
+                  <label className="absolute -bottom-1 -right-1 cursor-pointer rounded-full border border-white/20 bg-[#1a1d22] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white/70 hover:text-white hover:border-white/40">
+                    Edit
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const uid = currentUid();
+                        if (!uid) return;
+                        try {
+                          const reader = new FileReader();
+                          reader.onload = async () => {
+                            const dataUrl = String(reader.result || "");
+                            if (dataUrl.length > 500_000) {
+                              setProfileError("Image is too large. Try a smaller photo.");
+                              return;
+                            }
+                            const response = await fetch("/api/profile", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ userId: uid, avatarUrl: dataUrl }),
+                            });
+                            const result = await response.json().catch(() => ({}));
+                            if (!response.ok) throw new Error(result.error || "Could not update photo.");
+                            setProfile((p) => (p ? { ...p, avatarUrl: dataUrl } : p));
+                          };
+                          reader.readAsDataURL(file);
+                        } catch (error) {
+                          setProfileError(error instanceof Error ? error.message : "Could not update photo.");
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-[18px] sm:text-[20px] font-semibold text-white tracking-tight">
+                  {profile.displayName || profile.handle}
+                </h1>
+                <p className="mt-0.5 text-[12px] text-white/55">
+                  {profile.roleLine || "Builder"}
                   {profile.openToCollab && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      Open to collaborations
+                    <span className="ml-2 inline-flex items-center gap-1.5 text-emerald-300/90">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      Open to Collaborations
                     </span>
                   )}
-                  <span>📁 {profile.journeyCount} Journey{profile.journeyCount === 1 ? "" : "s"}</span>
-                </div>
+                </p>
+                {profile.bio ? (
+                  <p className="mt-2 text-[13px] text-white/60 leading-relaxed max-w-xl">
+                    &ldquo;{profile.bio}&rdquo;
+                  </p>
+                ) : null}
+                <p className="mt-3 text-[11px] text-white/45 tracking-wide">
+                  <span className="text-white/70">{focusHours}</span> Focus Hours Logged
+                  <span className="text-white/25"> · </span>
+                  <span className="text-white/70">{profile.journeyCount}</span> Active Journeys
+                  <span className="text-white/25"> · </span>
+                  <span className="text-white/70">{profile.helped.length}</span> Bottlenecks Unblocked
+                </p>
               </div>
-              {profile.isSelf ? (
+            </div>
+            {profile.isSelf ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditDisplayName(profile.displayName);
+                  setEditBio(profile.bio);
+                  setProfileError("");
+                  setEditingProfile((open) => !open);
+                }}
+                className="shrink-0 rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50"
+              >
+                {editingProfile ? "Cancel" : "Edit Profile"}
+              </button>
+            ) : (
+              <div className="flex gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
-                    setEditDisplayName(profile.displayName);
-                    setEditBio(profile.bio);
-                    setProfileError("");
-                    setEditingProfile((open) => !open);
+                    const uid = currentUid();
+                    if (!uid) {
+                      window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "message a builder" }));
+                      return;
+                    }
+                    useShellUi.getState().openInbox();
+                    window.dispatchEvent(new CustomEvent("wippo:message", { detail: { handle: profile.handle } }));
                   }}
-                  className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[12px] font-medium text-[var(--text)]"
+                  className="rounded-lg border border-dashed border-white/25 px-3 py-1.5 text-[11px] text-white/70 hover:text-white"
                 >
-                  {editingProfile ? "Cancel edit" : "Edit profile"}
+                  Message
                 </button>
-              ) : (
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const uid = currentUid();
-                      if (!uid) {
-                        window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "message a builder" }));
-                        return;
-                      }
-                      useShellUi.getState().openInbox();
-                      window.dispatchEvent(new CustomEvent("wippo:message", {
-                        detail: { handle: profile.handle },
-                      }));
-                    }}
-                    className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[12px] text-[var(--text)]"
-                  >
-                    Work with {profile.displayName}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const uid = currentUid();
-                      if (!uid) {
-                        try {
-                          window.dispatchEvent(new CustomEvent("wippo:auth"));
-                        } catch {}
-                        return;
-                      }
-                      try {
-                        await toggleUserFollow(profile.handle, following);
-                        setFollowing((f) => !f);
-                      } catch {}
-                    }}
-                    className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
-                      following
-                        ? "border border-[var(--line)] text-[var(--text)]"
-                        : "bg-[var(--coral)] text-white"
-                    }`}
-                  >
-                    {following ? "Following" : "Follow"}
-                  </button>
-                </div>
-              )}
-            </div>
-            <p className="mt-3 text-[14px] text-[var(--text-muted)] leading-relaxed max-w-xl">
-              {profile.bio}
-            </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const uid = currentUid();
+                    if (!uid) {
+                      window.dispatchEvent(new CustomEvent("wippo:auth"));
+                      return;
+                    }
+                    try {
+                      await toggleUserFollow(profile.handle, following);
+                      setFollowing((f) => !f);
+                    } catch {}
+                  }}
+                  className="rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80"
+                >
+                  {following ? "Following" : "Follow"}
+                </button>
+              </div>
+            )}
           </div>
-        </header>
 
-        {editingProfile && profile.isSelf && (
-          <form
-            className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 sm:p-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveProfile();
-            }}
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-[11px] text-[var(--text-faint)]">
+          {profile.isSelf && editingProfile && (
+            <form
+              className="mt-4 space-y-3 border-t border-dashed border-white/15 pt-4"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const uid = currentUid();
+                if (!uid) return;
+                setSavingProfile(true);
+                setProfileError("");
+                try {
+                  const response = await fetch("/api/profile", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      userId: uid,
+                      displayName: editDisplayName.trim(),
+                      bio: editBio.trim(),
+                    }),
+                  });
+                  const result = await response.json().catch(() => ({}));
+                  if (!response.ok) throw new Error(result.error || "Could not save profile.");
+                  setProfile((p) =>
+                    p
+                      ? {
+                          ...p,
+                          displayName: editDisplayName.trim() || p.displayName,
+                          bio: editBio.trim(),
+                        }
+                      : p
+                  );
+                  setEditingProfile(false);
+                } catch (error) {
+                  setProfileError(error instanceof Error ? error.message : "Could not save profile.");
+                } finally {
+                  setSavingProfile(false);
+                }
+              }}
+            >
+              <label className="block text-[11px] text-white/45">
                 Name
                 <input
                   value={editDisplayName}
-                  onChange={(event) => setEditDisplayName(event.target.value)}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
                   maxLength={48}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--line-strong)]"
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-white/30"
                 />
               </label>
-              <label className="block text-[11px] text-[var(--text-faint)]">
-                What you make
+              <label className="block text-[11px] text-white/45">
+                Bio
                 <textarea
                   value={editBio}
-                  onChange={(event) => setEditBio(event.target.value)}
+                  onChange={(e) => setEditBio(e.target.value)}
                   maxLength={280}
                   rows={2}
-                  className="mt-1 w-full resize-y rounded-xl border border-[var(--line)] bg-[var(--page)] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[var(--line-strong)]"
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-white/30"
                 />
               </label>
-            </div>
-            {profileError && <p role="alert" className="mt-3 text-[11px] text-red-300">{profileError}</p>}
-            <div className="mt-3 flex justify-end">
+              {profileError && <p role="alert" className="text-[11px] text-red-300">{profileError}</p>}
               <button
                 type="submit"
                 disabled={savingProfile || !editDisplayName.trim()}
-                className="rounded-full bg-[var(--coral)] px-4 py-2 text-[11px] font-semibold text-white disabled:opacity-50"
+                className="rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white disabled:opacity-40"
               >
                 {savingProfile ? "Saving…" : "Save profile"}
               </button>
-            </div>
-          </form>
-        )}
+            </form>
+          )}
+        </header>
 
-        <section>
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--growth)]">The work, in motion</p>
-              <h2 className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--text)]">Projects before profile</h2>
-            </div>
-            <p className="max-w-md text-[12px] leading-relaxed text-[var(--text-faint)]">{profile.recordLine}</p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {profile.journeys.map((j) => (
-              <button
-                key={j.id}
-                type="button"
-                onClick={() => useShellUi.getState().openProject(j.id)}
-                className="group relative min-h-[15rem] overflow-hidden rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)] p-5 text-left transition-transform duration-300 hover:-translate-y-1"
-              >
-                {j.cover && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                  <img src={j.cover} alt={`Latest work on ${j.title}`} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
-                )}
-                <span className={`absolute inset-0 ${j.cover ? "bg-gradient-to-t from-[#090c12] via-[#090c12]/65 to-[#090c12]/10" : "bg-[radial-gradient(ellipse_at_top_right,rgba(159,227,192,.12),transparent_55%),linear-gradient(145deg,#14201f,#090c12_75%)]"}`} />
-                <span className="relative inline-flex rounded-full border border-white/20 bg-black/25 px-3 py-1 text-[10px] font-medium text-white/80">
-                  {j.phase}{j.openDecision ? " · Open decision" : ""}
-                </span>
-                <div className="relative mt-16">
-                  <p className="text-[19px] font-semibold tracking-tight text-white">{j.title}</p>
-                  <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-white/75">{j.blurb}</p>
-                  <p className="mt-3 border-t border-white/15 pt-3 text-[11px] text-white/60">Latest trace · {j.latest}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 gap-8 border-t border-[var(--line)] pt-7 lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--coral)]">From the process</p>
-            <h2 className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--text)]">Notes from the work</h2>
-            <div className="mt-4 divide-y divide-[var(--line)]">
-              {profile.thinking.map((item) => (
-                <article key={item.id} className="py-4 first:pt-0">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className={`rounded-full border px-2 py-0.5 font-medium ${kindStyle(item.kind)}`}>{item.kind}</span>
-                    <span className="text-[var(--text-faint)]">{item.project} · {item.week}</span>
+        {/* Active project journeys */}
+        <section className="mt-6">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
+            Active project journeys
+          </h2>
+          {profile.journeys.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-white/15 px-4 py-8 text-center text-[12px] text-white/35">
+              No active journeys yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {profile.journeys.map((j) => (
+                <button
+                  key={j.id}
+                  type="button"
+                  onClick={() => useShellUi.getState().openProject(j.id)}
+                  className="rounded-xl border border-dashed border-white/20 overflow-hidden text-left hover:border-white/40 transition-colors"
+                >
+                  <div className="relative aspect-video bg-[#0a0b0d]">
+                    {j.cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={j.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center text-[10px] uppercase tracking-wider text-white/30">
+                        [15s video reel preview]
+                      </div>
+                    )}
                   </div>
-                  <h3 className="mt-2 text-[15px] font-semibold text-[var(--text)]">{item.title}</h3>
-                  <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-muted)]">{item.body}</p>
-                </article>
+                  <div className="px-3 py-2.5 border-t border-dashed border-white/15">
+                    <p className="text-[13px] font-medium text-white">
+                      {j.title}
+                      {j.phase ? <span className="text-white/40"> ({j.phase})</span> : null}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-white/50 line-clamp-1">
+                      {j.latest ? `Update: ${j.latest}` : j.blurb || "Open journey"}
+                    </p>
+                  </div>
+                </button>
               ))}
             </div>
-          </div>
+          )}
+        </section>
 
-          <aside className="space-y-5 lg:pt-1">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-faint)]">Tools in the work</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {profile.skills.map((skill) => (
-                  <span key={skill} className="rounded-full border border-[var(--line)] px-2.5 py-1 text-[11px] text-[var(--text-muted)]">{skill}</span>
+        {/* Verified proof of work */}
+        <section className="mt-6">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
+            Verified proof of work &amp; help highlights
+          </h2>
+          <div className="rounded-xl border border-dashed border-white/20 px-4 py-3">
+            {profile.helped.length === 0 ? (
+              <p className="text-[12px] text-white/35">No help highlights yet.</p>
+            ) : (
+              <ul className="space-y-2 text-[12px] text-white/70">
+                {profile.helped.map((item, index) => (
+                  <li key={`${item.who}-${index}`}>
+                    <span className="text-white/40">· </span>
+                    Unblocked <span className="text-emerald-300/90">@{item.who}</span> on {item.what}
+                  </li>
                 ))}
-              </div>
-            </div>
-            {profile.vouch && (
-              <blockquote className="border-l-2 border-[var(--growth)]/60 pl-3">
-                <p className="text-[13px] italic leading-relaxed text-[var(--text-muted)]">“{profile.vouch.quote}”</p>
-                <footer className="mt-2 text-[10px] text-[var(--text-faint)]">— {profile.vouch.by}, {profile.vouch.context}</footer>
-              </blockquote>
+              </ul>
             )}
-            {profile.helped.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-faint)]">Help passed along</p>
-                <ul className="mt-2 space-y-2">
-                  {profile.helped.map((item, index) => (
-                    <li key={`${item.who}-${index}`} className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-                      <span className="font-medium text-[var(--text)]">{item.who}</span> · {item.what}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </aside>
+          </div>
         </section>
       </div>
     </div>

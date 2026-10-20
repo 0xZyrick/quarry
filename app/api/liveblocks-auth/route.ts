@@ -22,7 +22,7 @@ export async function POST(req:Request){
   if(!secret)return json({error:"LIVEBLOCKS_SECRET_KEY is not set"},500);
   const {room}=await req.json().catch(()=>({}));
   if(typeof room!=="string"||!ROOM.test(room))return json({error:"invalid room"},400);
-  const a=authorize(req,room.slice(6));if(!a||a.hidden)return json({error:"not found"},404);
+  const a=await authorize(req,room.slice(6));if(!a||a.hidden)return json({error:"not found"},404);
   const u=a.idt;
   const session=new Liveblocks({secret}).prepareSession(u.id,{userInfo:{name:u.name,color:u.color}});
   session.allow(room,liveblocksAccess(a.caps)==="FULL"?session.FULL_ACCESS:session.READ_ACCESS); // spectators watch and show a cursor; they cannot write strokes or layout

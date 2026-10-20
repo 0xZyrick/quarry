@@ -8,7 +8,7 @@
 import {NODES} from "./map";
 import {Onboarding,isComplete,onboardingAdapter} from "./onboarding";
 export type Role="client"|"creator"|"guest";
-export type Profile={id:string;handle:string;creatorNodeId:string|null;clientRoomIds:string[];crewRoomIds:string[];gender?:"male"|"female"|null};
+export type Profile={id:string;handle:string;creatorNodeId:string|null;clientRoomIds:string[];crewRoomIds:string[];gender?:"male"|"female"|null;studioUnlocked?:boolean};
 export type RoomRole={role:Role;host:boolean}; // host = this creator owns the room they are standing in
 
 export const roleIn=(p:Profile|null,roomId:string):RoomRole=>{
@@ -31,7 +31,7 @@ const MOCK:Record<string,Profile>={
   client:{id:"u-client",handle:"acme.studio",creatorNodeId:null,clientRoomIds:NODES.map(n=>n.id),crewRoomIds:[]}};
 // Profile from the onboarding record. creatorNodeId is a placeholder room id until the server assigns the creator a real node.
 const fromOnboarding=(o:Onboarding):Profile=>({id:o.uid!,handle:o.name!,
-  creatorNodeId:o.track==="creator"?"own:"+o.uid!.slice(-8):null,clientRoomIds:o.track==="client"?NODES.map(n=>n.id):[],crewRoomIds:[],gender:o.gender});
+  creatorNodeId:o.track==="creator"?"own:"+o.uid!.slice(-8):null,clientRoomIds:o.track==="client"?NODES.map(n=>n.id):[],crewRoomIds:[],gender:o.gender,studioUnlocked:false});
 // In development, `?as=creator|client|guest` still picks a fake account and skips onboarding.
 // Otherwise the account comes from the onboarding record; nobody is signed in until it is complete.
 // The server issues the session cookie and returns the profile it computed from its registry (POST /api/session).

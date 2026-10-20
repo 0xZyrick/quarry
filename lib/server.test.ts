@@ -3,7 +3,7 @@ import {cookieFor,readSession} from "./server/session";
 import {profileFor,goLive,snapshot,getRoom} from "./server/registry";
 import * as chat from "./server/chat";
 import {kindIn,capsOf} from "./access";
-import {validInvite,cleanName,TEST_CODE} from "./server/invite";
+import {cleanName} from "./server/invite";
 import {claimHandle} from "./server/registry";
 let bad=0;const eq=(a:any,b:any,m:string)=>{if(JSON.stringify(a)!==JSON.stringify(b)){bad++;console.log("FAIL",m,JSON.stringify(a),"!=",JSON.stringify(b))}else console.log("ok  ",m)};
 const req=(c?:string)=>new Request("http://x/",{headers:c?{cookie:c.split(";")[0]}:{}});
@@ -30,9 +30,6 @@ chat.passMic("t1","ghost");eq(chat.passMic("t1","ghost"),null,"unknown handle re
 eq(got.filter(x=>x.startsWith("msg")).length>=3,true,"subscribers receive lines");off();
 eq(chat.snapshot("t1").slots,["ann"],"snapshot has slots");
 
-// invite-only entry
-eq(validInvite(TEST_CODE),true,"test invite code works");eq(validInvite(" guild-alpha-27 "),true,"codes ignore case and spaces");
-eq(validInvite("nope"),false,"wrong code rejected");eq(validInvite(undefined),false,"missing code rejected");
 eq(cleanName("  Tunde Codes! "),"tunde.codes","name becomes a clean handle");eq(cleanName("a"),null,"too short rejected");eq(cleanName("Admin"),null,"reserved name rejected");
 eq(claimHandle("tunde.codes","inv_aaaaaaaa1"),true,"name claimed");eq(claimHandle("tunde.codes","inv_bbbbbbbb2"),false,"name taken by someone else");eq(claimHandle("tunde.codes","inv_aaaaaaaa1"),true,"same account may re-claim");
 eq(claimHandle("kodo.dev","inv_cccccccc3"),false,"demo creator names are reserved");

@@ -7,6 +7,6 @@ export const dynamic="force-dynamic";
 export async function POST(req:Request){
   if(!sameOrigin(req))return json({error:"forbidden"},403);
   const s=getIdentity(req).session;if(!s)return json({error:"sign in"},401);
-  if(!limit("appeal:"+s.uid,5,36e5))return json({error:"too many appeals"},429);
-  const b=await req.json().catch(()=>({})),r=safety.appeal(String(b.caseId??""),s.uid,String(b.text??""));
+  if(!(await limit("appeal:"+s.uid,5,36e5)))return json({error:"too many appeals"},429);
+  const b=await req.json().catch(()=>({})),r=await safety.appeal(String(b.caseId??""),s.uid,String(b.text??""));
   return r.ok?json({ok:true}):json({error:r.error},r.code)}

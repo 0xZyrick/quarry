@@ -21,6 +21,7 @@ model User {
   gender      String?  // male | female — simple avatar seed
   interests   String[] @default([])
   levelTrack  String   @default("rising_craftsman")
+  studioUnlocked Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -91,6 +92,7 @@ model JourneyNode {
   position        Int
   dayLabel        String
   phaseTitle      String
+  updateTitle     String?
   summaryText     String
   prevSnapshotUrl String?
   nextSnapshotUrl String?
@@ -257,19 +259,28 @@ model HelpRequest {
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   nodeId      String?
   journeyNode JourneyNode?     @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  /// Room / update this ask is bound to (dies when host leaves that room)
+  roomId      String?
+  sessionId   String?
   creatorId   String
   title       String
   body        String?
   tags        String[]         @default([])
   status      HelpRequestStatus @default(OPEN)
+  /// Legacy single claimer (kept for old rows)
   claimedById String?
   claimedAt   DateTime?
+  /// Users waiting for host accept
+  pendingIds  String[]         @default([])
+  /// Accepted co-team for this update (max 3)
+  acceptedIds String[]         @default([])
   createdAt   DateTime         @default(now())
   closedAt    DateTime?
 
   @@index([projectId, status])
   @@index([status, createdAt])
   @@index([creatorId])
+  @@index([roomId, status])
 }
 
 enum HelpRequestStatus {
@@ -374,4 +385,206 @@ model UserHome {
   userId    String   @id
   zoneId    String
   updatedAt DateTime @updatedAt
+}
+
+// ─── Spatial registry (rooms, crew, hub live state) ─────────────────────────
+// Durable replacement for the in-memory Maps in lib/server/registry.ts
+
+model GuildRoom {
+  id        String   @id // n0…n13 | own:<suffix>
+  type      String // commons | war
+  ownerUid  String?
+  handle    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  crew GuildCrewMember[]
+  hub  GuildHub?
+
+  @@index([ownerUid])
+  @@index([handle])
+}
+
+model GuildCrewMember {
+  roomId    String
+  uid       String
+  createdAt DateTime @default(now())
+
+  room GuildRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, uid])
+  @@index([uid])
+}
+
+model GuildHub {
+  roomId     String   @id
+  live       Boolean  @default(false)
+  suspended  Boolean  @default(false)
+  greenroom  Boolean  @default(false)
+  /// Gate: canvas source (Figma, VS Code, …) and/or skill tag
+  gateCanvas String?
+  gateSkill  String?
+  /// Launch Portal meta
+  metaTitle  String?
+  metaTags   String[] @default([])
+  metaEnv    String? // sandbox | focus
+  metaPath   String? // digital | physical
+  metaZone   String?
+  /// Account ids that currently contribute weight to the flag count
+  flagUids   String[] @default([])
+  updatedAt  DateTime @updatedAt
+
+  room GuildRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+/// Display-name claims used by the spatial map (demo nodes + user handles)
+model GuildHandle {
+  handle    String   @id
+  uid       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([uid])
+}
+
+// ─── Trust & safety (durable cases, bans, mutes, audit) ─────────────────────
+
+model SafetyCase {
+  id             String    @id @default(cuid())
+  kind           String // stream | user
+  roomId         String
+  ownerUid       String?
+  target         String? // handle for user-kind reports
+  reasons        String[]  @default([])
+  severe         Boolean   @default(false)
+  state          String // open | upheld | dismissed | appealed | reinstated | expired
+  held           Boolean   @default(false)
+  restoreAt      DateTime?
+  appealText     String?
+  appealAt       DateTime?
+  decisionBy     String?
+  decisionAt     DateTime?
+  decisionAction String?
+  decisionNote   String?
+  openedAt       DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  reporters SafetyReport[]
+
+  @@index([roomId, state])
+  @@index([state, severe])
+  @@index([ownerUid])
+  @@index([restoreAt])
+}
+
+model SafetyReport {
+  id        String     @id @default(cuid())
+  caseId    String
+  case      SafetyCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  uid       String
+  reason    String
+  weight    Float
+  createdAt DateTime   @default(now())
+
+  @@unique([caseId, uid])
+  @@index([uid, createdAt])
+}
+
+model AccountBan {
+  uid       String    @id
+  until     DateTime? // null = permanent
+  reason    String
+  by        String
+  createdAt DateTime  @default(now())
+}
+
+model AccountStrike {
+  uid       String   @id
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model RoomMute {
+  roomId    String
+  uid       String
+  createdAt DateTime @default(now())
+
+  @@id([roomId, uid])
+  @@index([uid])
+}
+
+model RoomBan {
+  roomId    String
+  uid       String
+  createdAt DateTime @default(now())
+
+  @@id([roomId, uid])
+  @@index([uid])
+}
+
+model ReporterStats {
+  uid       String @id
+  upheld    Int    @default(0)
+  dismissed Int    @default(0)
+}
+
+model SafetyAudit {
+  id     String   @id @default(cuid())
+  at     DateTime @default(now())
+  by     String
+  action String
+  detail Json?
+
+  @@index([at])
+}
+
+/// First time the server saw this account (for report weight / throwaway filter)
+model AccountSeen {
+  uid       String   @id
+  firstSeen DateTime @default(now())
+}
+
+/// First moment an account was inside a room (dwell gate for reports)
+model RoomDwell {
+  roomId    String
+  uid       String
+  enteredAt DateTime @default(now())
+
+  @@id([roomId, uid])
+}
+
+// ─── Room chat (messages + mic state) ───────────────────────────────────────
+
+model ChatMessage {
+  id        String   @id
+  roomId    String
+  kind      String // text | system
+  by        String // handle or "system"
+  uid       String? // account that sent it (null for system)
+  text      String
+  question  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([roomId, createdAt])
+}
+
+/// Current mic queue and open slots for a room (single row per room)
+model ChatMicState {
+  roomId    String   @id
+  /// Handles waiting for the mic
+  requests  String[] @default([])
+  /// Handles currently holding a mic slot (max 2)
+  slots     String[] @default([])
+  updatedAt DateTime @updatedAt
+}
+
+/// handle → uid mapping observed in a room (for moderation actions)
+model ChatHandle {
+  roomId String
+  handle String
+  uid    String
+  updatedAt DateTime @updatedAt
+
+  @@id([roomId, handle])
+  @@index([roomId, uid])
 }
