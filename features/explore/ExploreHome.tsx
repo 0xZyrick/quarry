@@ -254,7 +254,7 @@ export default function ExploreHome() {
           </div>
         </div>
 
-        <main className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 pb-20 sm:pb-8 snap-y-feed sm:snap-none">
+        <main className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 pb-20 sm:pb-8">
           {actionError && <p role="alert" className="mb-3 text-[12px] text-red-300">{actionError}</p>}
           {loadError && (
             <div role="alert" className="rounded-xl border border-red-400/20 bg-red-400/[0.05] p-4 mb-4">
@@ -282,160 +282,204 @@ export default function ExploreHome() {
             <p className="py-12 text-center text-small text-white/40">Nothing in this filter.</p>
           )}
 
-          {/* Video-first masonry-ish grid */}
-          <div className="flex flex-col gap-3 sm:block sm:columns-2 sm:gap-3 sm:space-y-3">
+          {/* Feed cards — header / media+actions / caption (Instagram-style) */}
+          <div className="flex flex-col gap-5 sm:block sm:columns-2 sm:gap-4 sm:space-y-4">
             {filtered.map((c) => {
               const isHover = hoverId === c.id;
               const isLive = c.status === "live";
               const isHelp = c.status === "needs_hand";
               const videoPreview = c.hasVideo && !!c.mediaUrl && /\.(mp4|webm|mov)(\?|$)/i.test(c.mediaUrl);
+              const worldTitle = c.projectTitle || c.title || "Untitled";
+              const updateText = c.target || c.title || "";
               return (
                 <article
                   key={c.id}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => { if (!c.id.startsWith("mock-")) walkIn(c.id); }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      if (!c.id.startsWith("mock-")) walkIn(c.id);
-                    }
+                  className="break-inside-avoid mb-0 sm:mb-0"
+                  ref={(node) => {
+                    if (!node || typeof IntersectionObserver === "undefined") return;
+                    const video = node.querySelector("video");
+                    if (!video) return;
+                    const obs = new IntersectionObserver(
+                      ([entry]) => {
+                        const v = node.querySelector("video");
+                        if (!v) return;
+                        if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+                          v.dataset.inview = "1";
+                          const coarse = window.matchMedia("(hover: none)").matches;
+                          if (coarse) void v.play().catch(() => {});
+                        } else {
+                          v.dataset.inview = "0";
+                          v.pause();
+                          try { v.currentTime = 0.05; } catch { /* ignore */ }
+                        }
+                      },
+                      { threshold: [0.55] }
+                    );
+                    obs.observe(node);
+                    (node as any)._wippoObs?.disconnect?.();
+                    (node as any)._wippoObs = obs;
                   }}
-                  onMouseEnter={(event) => {
+                  onMouseEnter={() => {
                     setHoverId(c.id);
-                    const video = event.currentTarget.querySelector("video");
+                    const video = document.querySelector(`article[data-card="${c.id}"] video`) as HTMLVideoElement | null;
                     if (video) void video.play().catch(() => {});
                   }}
-                  onMouseLeave={(event) => {
+                  onMouseLeave={() => {
                     setHoverId(null);
-                    const video = event.currentTarget.querySelector("video");
+                    const video = document.querySelector(`article[data-card="${c.id}"] video`) as HTMLVideoElement | null;
                     if (video) {
                       video.pause();
-                      video.currentTime = 0;
+                      try { video.currentTime = 0.05; } catch { /* ignore */ }
                     }
                   }}
-                  className={`break-inside-avoid relative overflow-hidden rounded-lg bg-[#111318] group snap-item sm:snap-align-none min-h-[calc(100dvh-8.5rem)] sm:min-h-0 ${
-                    isHelp ? "ring-1 ring-[#F59E0B]/50" : isLive ? "ring-1 ring-[#10B981]/35" : ""
-                  } cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/40`}
+                  data-card={c.id}
                 >
-                  {/* Full-bleed media with text overlays */}
-                  <div className="relative aspect-[9/16] sm:aspect-video min-h-[calc(100dvh-8.5rem)] sm:min-h-0 h-full bg-[#0a0b0d] overflow-hidden">
-                    {videoPreview ? (
-                      <>
-                        {/* Poster always underneath so empty/black video never wins */}
-                        {c.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={c.imageUrl}
-                            alt=""
-                            className="absolute inset-0 h-full w-full object-cover"
-                          />
-                        ) : null}
-                        <video
-                          key={c.mediaUrl || c.id}
-                          src={isHover ? (c.mediaUrl || undefined) : undefined}
-                          poster={c.imageUrl || undefined}
-                          muted
-                          playsInline
-                          loop
-                          preload="none"
-                          controls={false}
-                          ref={(el) => {
-                            if (!el) return;
-                            el.muted = true;
-                            if (isHover) {
-                              void el.play().catch(() => {});
-                            } else {
+                  {/* Top: world title, then username — both clickable */}
+                  <div className="px-0.5 mb-2 space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (c.id.startsWith("mock-")) return;
+                        walkIn(c.id);
+                      }}
+                      className="block w-full text-left text-[15px] sm:text-body font-semibold text-white hover:text-white/90 transition-colors line-clamp-1"
+                    >
+                      {worldTitle}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (c.id.startsWith("mock-")) return;
+                        useShellUi.getState().openVault(c.creatorHandle);
+                      }}
+                      className="block text-left text-small text-white/50 hover:text-white/80 transition-colors"
+                    >
+                      @{c.creatorHandle}
+                    </button>
+                  </div>
+
+                  {/* Media + right rail actions */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (c.id.startsWith("mock-")) return;
+                        walkIn(c.id);
+                      }}
+                      className={`relative block w-full overflow-hidden rounded-lg bg-[#111318] aspect-video focus:outline-none focus:ring-2 focus:ring-white/30 ${
+                        isHelp ? "ring-1 ring-[#F59E0B]/45" : isLive ? "ring-1 ring-[#10B981]/35" : ""
+                      }`}
+                    >
+                      <div className="absolute inset-0 bg-[#0a0b0d] overflow-hidden">
+                        {videoPreview ? (
+                          <video
+                            key={c.mediaUrl || c.id}
+                            src={c.mediaUrl || undefined}
+                            muted
+                            playsInline
+                            loop
+                            preload="metadata"
+                            controls={false}
+                            ref={(el) => {
+                              if (!el) return;
+                              el.muted = true;
+                              const wantPlay = isHover || el.dataset.inview === "1";
+                              if (wantPlay) void el.play().catch(() => {});
+                              else {
+                                el.pause();
+                                if (el.readyState >= 1) {
+                                  try { el.currentTime = 0.05; } catch { /* ignore */ }
+                                }
+                              }
+                            }}
+                            onLoadedMetadata={(event) => {
+                              const el = event.currentTarget;
+                              try { el.currentTime = 0.05; } catch { /* ignore */ }
                               el.pause();
-                              el.removeAttribute("src");
-                              el.load();
-                            }
-                          }}
-                          onTimeUpdate={(event) => {
-                            if (event.currentTarget.currentTime >= 12) {
-                              event.currentTarget.currentTime = 0;
-                            }
-                          }}
-                          className={`absolute inset-0 h-full w-full object-cover transition duration-500 ${
-                            isHover ? "scale-[1.03] opacity-100" : "scale-100 opacity-0"
-                          }`}
-                        />
-                      </>
-                    ) : c.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={c.imageUrl}
-                        alt=""
-                        className={`h-full w-full object-cover transition duration-700 ${
-                          isHover ? "scale-[1.05] brightness-110" : ""
-                        }`}
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,.14),transparent_45%),linear-gradient(160deg,#14171c,#0a0b0d)]" />
-                    )}
-
-                    {/* Readability gradients */}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-black/15 to-transparent" />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-
-                    {/* Top: status chips only */}
-                    <div className="absolute inset-x-0 top-0 p-3 sm:p-3.5">
-                      <div className="flex items-center gap-1.5">
+                            }}
+                            onTimeUpdate={(event) => {
+                              if (event.currentTarget.currentTime >= 12) {
+                                event.currentTarget.currentTime = 0.05;
+                              }
+                            }}
+                            className={`absolute inset-0 h-full w-full object-cover transition duration-500 ${
+                              isHover ? "scale-[1.02]" : "scale-100"
+                            }`}
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,.14),transparent_45%),linear-gradient(160deg,#14171c,#0a0b0d)]" />
+                        )}
                         {isLive && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white ring-1 ring-white/10 backdrop-blur-md">
+                          <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white ring-1 ring-white/10">
                             <span className="h-1.5 w-1.5 rounded-full bg-[#10B981] animate-pulse" />
                             LIVE
                           </span>
                         )}
-                        {isHelp && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B]/20 px-2 py-0.5 text-[10px] font-semibold text-amber-100 ring-1 ring-[#F59E0B]/40 backdrop-blur-md">
-                            Needs a hand
-                          </span>
-                        )}
-                        {!isLive && !isHelp && c.hasVideo && (
-                          <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white/80 ring-1 ring-white/10 backdrop-blur-md">
-                            Log reel
-                          </span>
-                        )}
-                        {(c.id.startsWith("mock-") || c.id.startsWith("demo-")) && (
-                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/50 ring-1 ring-white/10 backdrop-blur-md">
-                            Sample
-                          </span>
-                        )}
                       </div>
-                    </div>
+                    </button>
 
-                    {/* Bottom: white goal (was yellow slot) · green handle — no yellow */}
-                    <div className="absolute inset-x-0 bottom-0 p-3 sm:p-3.5 space-y-1">
+                    {/* Right-side interactions: + follow · branch need-a-hand */}
+                    <div className="absolute right-2.5 bottom-2.5 sm:right-3 sm:bottom-3 flex flex-col items-center gap-2.5 z-10">
                       <button
                         type="button"
+                        aria-label={`Follow @${c.creatorHandle}`}
+                        title="Follow"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (c.id.startsWith("mock-")) return;
+                          useShellUi.getState().openVault(c.creatorHandle);
+                        }}
+                        className="grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white ring-1 ring-white/15 backdrop-blur-md hover:bg-black/70 hover:scale-105 transition"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={isHelp ? "Jump in and help" : "Needs a hand"}
+                        title={isHelp ? "Jump in & help" : "Offer a hand"}
+                        disabled={claimingHelpId === c.helpId || c.id.startsWith("mock-")}
                         onClick={(event) => {
                           event.stopPropagation();
                           if (c.id.startsWith("mock-")) return;
                           if (isHelp) void jumpInAndUnblock(c);
                           else walkIn(c.id);
                         }}
-                        disabled={claimingHelpId === c.helpId || c.id.startsWith("mock-")}
-                        className="block max-w-[95%] text-left text-[16px] sm:text-[18px] font-semibold leading-snug line-clamp-2 text-white drop-shadow-[0_1px_8px_rgba(0,0,0,.85)] hover:text-white/90 transition-colors"
+                        className={`grid h-10 w-10 place-items-center rounded-full ring-1 backdrop-blur-md transition hover:scale-105 disabled:opacity-40 ${
+                          isHelp
+                            ? "bg-[#F59E0B]/90 text-[#1a1200] ring-[#F59E0B]/50"
+                            : "bg-black/55 text-white ring-white/15 hover:bg-black/70"
+                        }`}
                       >
-                        {c.target || c.title || "Open room"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (c.id.startsWith("mock-")) return;
-                          useShellUi.getState().openVault(c.creatorHandle);
-                        }}
-                        className="block text-left text-[14px] text-white/55 drop-shadow-[0_1px_6px_rgba(0,0,0,.7)] hover:text-white/80"
-                      >
-                        @{c.creatorHandle}
+                        {/* Git branch icon */}
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="6" cy="6" r="2.25" />
+                          <circle cx="6" cy="18" r="2.25" />
+                          <circle cx="18" cy="6" r="2.25" />
+                          <path d="M6 8.25v7.5" />
+                          <path d="M8.25 6H15a3 3 0 0 1 3 3v0" />
+                        </svg>
                       </button>
                     </div>
                   </div>
+
+                  {/* Caption below media — update text */}
+                  {updateText ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (c.id.startsWith("mock-")) return;
+                        if (isHelp) void jumpInAndUnblock(c);
+                        else walkIn(c.id);
+                      }}
+                      className="mt-2 px-0.5 block w-full text-left text-small sm:text-body text-white/75 hover:text-white leading-snug line-clamp-2 transition-colors"
+                    >
+                      <span className="font-medium text-white/90">@{c.creatorHandle}</span>
+                      <span className="text-white/35"> · </span>
+                      {updateText}
+                    </button>
+                  ) : null}
                 </article>
               );
             })}

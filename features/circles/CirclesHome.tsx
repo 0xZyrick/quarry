@@ -169,15 +169,15 @@ export default function CirclesHome() {
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0B0C0E]">
-      <div className="h-full max-w-[1600px] mx-auto flex flex-col px-3 sm:px-5 pt-3 pb-20 sm:pb-3 gap-3 overflow-y-auto sm:overflow-hidden">
+      <div className="h-full max-w-[1600px] mx-auto flex flex-col px-3 sm:px-5 pt-3 pb-24 sm:pb-3 gap-3 overflow-y-auto">
         {(feedError || actionError) && (
           <p role="alert" className="text-[12px] text-red-300 shrink-0">{actionError || feedError}</p>
         )}
 
         {/* Split: launchpad 65% · network pulse 35% */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-3 auto-rows-min lg:auto-rows-fr">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-3">
           {/* LEFT — Quick launchpad */}
-          <section className="min-h-0 flex flex-col rounded-xl border border-white/[0.06] bg-[#111318] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+          <section className="flex flex-col rounded-xl border border-white/[0.06] bg-[#111318] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.25)] lg:min-h-0">
             <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between gap-2">
               <h1 className="text-h3 text-white">Your quick launchpad</h1>
               <button
@@ -194,7 +194,7 @@ export default function CirclesHome() {
                 ● Go live
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+            <div className="overflow-y-auto p-4 space-y-4 lg:flex-1 lg:min-h-0">
               <div className="space-y-2">
                 <p className="text-caption uppercase tracking-wider text-white/45">Session context</p>
                 <p className="text-[13px] text-white/70">
@@ -246,8 +246,8 @@ export default function CirclesHome() {
           </section>
 
           {/* RIGHT — Network pulse */}
-          <section className="min-h-0 flex flex-col gap-3">
-            <div className="flex-1 min-h-0 rounded-2xl border border-white/[0.06] bg-[#111318] overflow-hidden flex flex-col">
+          <section className="flex flex-col gap-3 lg:min-h-0">
+            <div className="rounded-xl border border-white/[0.06] bg-[#111318] overflow-hidden flex flex-col lg:flex-1 lg:min-h-0">
               <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between">
                 <h2 className="text-[13px] font-semibold text-white flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#10B981] animate-pulse" />
@@ -255,7 +255,7 @@ export default function CirclesHome() {
                 </h2>
                 <span className="text-[11px] tabular-nums text-white/35">{liveCards.length}</span>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+              <div className="overflow-y-auto p-3 space-y-2 max-h-64 lg:flex-1 lg:min-h-0 lg:max-h-none">
                 {liveError && <p className="text-[11px] text-red-300">{liveError}</p>}
                 {!loading && liveCards.length === 0 && (
                   <p className="text-[12px] text-white/40 px-1 py-4">No live tables right now.</p>
@@ -289,7 +289,7 @@ export default function CirclesHome() {
               </div>
             </div>
 
-            <div className="shrink-0 max-h-[40%] rounded-2xl border border-[#F59E0B]/25 bg-[#111318] overflow-hidden flex flex-col">
+            <div className="shrink-0 rounded-xl border border-[#F59E0B]/25 bg-[#111318] overflow-hidden flex flex-col">
               <div className="px-4 py-2.5 border-b border-white/[0.05] flex items-center justify-between">
                 <h2 className="text-[13px] font-semibold text-amber-100 flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
@@ -324,7 +324,7 @@ export default function CirclesHome() {
         </div>
 
         {/* Bottom — recent log reels */}
-        <section className="shrink-0 rounded-xl border border-white/[0.06] bg-[#111318] px-3 py-3">
+        <section className="shrink-0 rounded-xl border border-white/[0.06] bg-[#111318] px-3 py-3 mb-2">
           <p className="text-[10px] uppercase tracking-wider text-white/35 mb-2 px-1">Recent video log reels</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {episodes.slice(0, 8).map((ep) => (

@@ -475,149 +475,216 @@ export default function ProjectJourneyPage({
           ← Back
         </button>
 
-        {/* Wireframe header */}
-        <header className="mb-8 relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141b26] via-[#111318] to-[#0e131c] px-5 py-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
-          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[var(--coral)]/10 blur-3xl" />
-          <div className="pointer-events-none absolute -left-6 bottom-0 h-24 w-24 rounded-full bg-[var(--growth)]/10 blur-2xl" />
-          <div className="relative flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 text-body text-white tracking-wide">
-              <span className="text-h3 font-semibold">{project.title}</span>
-              <span className="text-white/40"> · By </span>
+        {/* Banner — loop video from latest upload, else brand gradient */}
+        <header className="mb-6 relative overflow-hidden rounded-xl border border-white/10 min-h-[12rem] sm:min-h-[16rem] shadow-[0_16px_48px_rgba(0,0,0,0.4)]">
+          {(() => {
+            const latest = logNodes[0];
+            const media =
+              latest?.mediaDrops?.find((d: any) => d.videoUrl)?.videoUrl ||
+              (latest as any)?.mediaUrl ||
+              latest?.vodUrl ||
+              null;
+            const isVideo = media && /\.(mp4|webm|mov)(\?|$)/i.test(media);
+            return isVideo ? (
+              <video
+                src={media}
+                muted
+                playsInline
+                loop
+                autoPlay
+                preload="metadata"
+                className="absolute inset-0 h-full w-full object-cover opacity-70"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-[#3d2a28] via-[#1a2230] to-[#0e131c]" />
+            );
+          })()}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0C0E] via-[#0B0C0E]/55 to-transparent" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_15%_20%,rgba(255,118,95,0.25),transparent_50%)]" />
+          <div className="relative flex flex-col justify-end min-h-[12rem] sm:min-h-[16rem] px-5 sm:px-8 pb-5 sm:pb-6 pt-16">
+            <p className="text-caption uppercase tracking-[0.16em] text-white/50 mb-2">Project journey</p>
+            <h1 className="text-[1.75rem] sm:text-[2.75rem] font-bold text-white tracking-tight leading-none">
+              {project.title}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={() => useShellUi.getState().openVault(handle.replace(/^@/, ""))}
-                className="text-white/70 hover:text-white hover:underline"
+                className="text-small text-white/70 hover:text-white hover:underline"
               >
                 @{handle}
               </button>
-              <span className="text-white/40"> · </span>
-              <span className="text-white/55">
-                [Lifecycle: {PHASES[Math.min(activePhase, PHASES.length - 1)] || "Alpha"} Node]
+              <span className="text-white/25">·</span>
+              <span className="text-small text-white/50">
+                {PHASES[Math.min(activePhase, PHASES.length - 1)] || "Alpha"}
               </span>
+              <button
+                type="button"
+                onClick={() => void toggleProjectFollow()}
+                disabled={followBusy}
+                className="ml-auto shrink-0 rounded-full bg-white text-[#0B0C0E] px-4 py-1.5 text-[12px] font-semibold hover:scale-[1.02] transition"
+              >
+                {inCircle ? "Following" : "Follow"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void toggleProjectFollow()}
-              disabled={followBusy}
-              className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50 hover:text-white"
-            >
-              {inCircle ? "Following" : "+ Follow Journey"}
-            </button>
+            {followError && <p role="alert" className="mt-2 text-[12px] text-red-300">{followError}</p>}
           </div>
-          {followError && <p role="alert" className="mt-2 text-[11px] text-red-300">{followError}</p>}
         </header>
 
-        {/* Chronological log entries */}
-        <div className="space-y-5">
-          {logNodes.length === 0 && (
-            <p className="py-16 text-center text-[13px] text-white/40">No log entries yet.</p>
-          )}
-          {logNodes.map((n) => {
-            const tried = parseTried(n.evolutionDelta);
-            const attempts = (n.triedAttempts || []).map((a) => ({
-              kind: a.outcome || "Tried",
-              text: a.detail || "",
-            }));
-            const decisions = attempts.length ? attempts : tried;
-            const media =
-              n.vodUrl ||
-              n.liveUrl ||
-              n.mediaDrops?.[0]?.videoUrl ||
-              n.mediaDrops?.[0]?.imageUrl ||
-              n.nextSnapshotUrl ||
-              n.imageUrls?.[0] ||
-              null;
-            const isVideo = !!(media && /\.(mp4|webm|mov)(\?|$)/i.test(media));
-            const active = selected?.id === n.id;
-            return (
-              <section
-                key={n.id}
-                className={`rounded-xl border ${
-                  active ? "border-white/40 bg-white/[0.03]" : "border-white/20"
-                } overflow-hidden`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(n.id)}
-                  className="w-full px-4 py-3 text-left text-small sm:text-body text-white/90 border-b border-white/10 hover:bg-white/[0.02]"
-                >
-                  <span className="text-white/50">[ LOG #{String(n.position).padStart(3, "0")} ]</span>
-                  <span className="text-white/40"> — </span>
-                  <span>{n.dayLabel || `Update ${n.position}`}</span>
-                  <span className="text-white/40"> · </span>
-                  <span className="font-medium">&ldquo;{n.updateTitle || n.phaseTitle}&rdquo;</span>
-                </button>
+        {/* Horizontal phase rail (Spotify-style left→right) */}
+        <div className="mb-6 overflow-x-auto pb-2 -mx-1 px-1">
+          <div className="flex items-center gap-0 min-w-min">
+            {PHASES.map((phase, i) => {
+              const active = i === Math.min(activePhase, PHASES.length - 1);
+              return (
+                <div key={phase} className="flex items-center shrink-0">
+                  {i > 0 && (
+                    <div className={`w-8 sm:w-12 h-px ${active || i < activePhase ? "bg-[var(--coral)]/40" : "bg-white/15"}`} />
+                  )}
+                  <div className="flex flex-col items-center gap-1 min-w-[4rem] max-w-[5.5rem] px-1">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        active
+                          ? "bg-[var(--coral)] shadow-[0_0_0_3px_rgba(255,118,95,0.25)]"
+                          : i < activePhase
+                            ? "bg-[var(--coral)]/50"
+                            : "border border-white/30 bg-transparent"
+                      }`}
+                    />
+                    <span className={`text-[11px] text-center leading-tight line-clamp-2 ${active ? "text-white font-medium" : "text-white/40"}`}>
+                      {phase}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-0">
-                  {/* 15s autoplaying canvas / video reel */}
-                  <div className="relative aspect-video bg-[#0a0b0d] border-b md:border-b-0 md:border-r border-white/10">
-                    {media ? (
-                      isVideo ? (
+        <div className="space-y-3">
+          {logNodes.length === 0 && (
+            <p className="py-16 text-center text-small text-white/40">No log entries yet.</p>
+          )}
+          {logNodes.length > 0 && (() => {
+            const ordered = logNodes; // already newest-first
+            const [latest, ...rest] = ordered;
+            const renderMedia = (n: typeof latest) => {
+              const media =
+                n.mediaDrops?.find((d: any) => d.videoUrl)?.videoUrl ||
+                (n as any).mediaUrl ||
+                n.vodUrl ||
+                null;
+              const isVideo = media && /\.(mp4|webm|mov)(\?|$)/i.test(String(media));
+              return { media, isVideo };
+            };
+            const latestMedia = renderMedia(latest);
+            return (
+              <>
+                {/* Latest update — full information + goal */}
+                <section className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+                  <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+                    <div className="relative aspect-video bg-[#0a0b0d]">
+                      {latestMedia.media && latestMedia.isVideo ? (
                         <video
-                          src={media}
+                          src={String(latestMedia.media)}
                           muted
                           playsInline
                           loop
-                          autoPlay={active}
+                          preload="metadata"
                           className="absolute inset-0 h-full w-full object-cover"
                           onMouseEnter={(e) => void e.currentTarget.play().catch(() => {})}
                           onMouseLeave={(e) => {
                             e.currentTarget.pause();
-                            e.currentTarget.currentTime = 0;
+                            try { e.currentTarget.currentTime = 0.05; } catch { /* */ }
+                          }}
+                          onLoadedMetadata={(e) => {
+                            try { e.currentTarget.currentTime = 0.05; } catch { /* */ }
+                            e.currentTarget.pause();
                           }}
                         />
                       ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={media} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                      )
-                    ) : (
-                      <div className="absolute inset-0 grid place-items-center text-[11px] text-white/30 uppercase tracking-wider">
-                        [ 15s autoplaying canvas video reel ]
-                      </div>
-                    )}
-                    <p className="absolute bottom-2 left-2 text-[10px] text-white/40 bg-black/40 px-1.5 py-0.5 rounded">
-                      Hover to scrub or play full VOD
-                    </p>
-                  </div>
-
-                  {/* Decision log */}
-                  <div className="p-4 space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
-                      Decision log
-                    </p>
-                    <ul className="space-y-1.5 text-[12px] text-white/70 leading-relaxed">
-                      <li>
-                        <span className="text-white/40">· Goal: </span>
-                        {n.summaryText || "Ship this stop cleanly."}
-                      </li>
-                      {decisions.map((d, i) => (
-                        <li key={i}>
-                          <span className="text-white/40">· {d.kind}: </span>
-                          {d.text}
-                        </li>
-                      ))}
-                      {!decisions.length && project.currentState && active && (
-                        <li>
-                          <span className="text-white/40">· Decision: </span>
-                          {project.currentState}
-                        </li>
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#2a3548] to-[#0a0b0d]" />
                       )}
-                    </ul>
-                    {(n.vodUrl || n.liveUrl) && (
-                      <a
-                        href={n.vodUrl || n.liveUrl || undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-block mt-2 text-[11px] text-sky-300/80 hover:text-sky-200 underline"
-                      >
-                        Open full VOD
-                      </a>
-                    )}
+                    </div>
+                    <div className="p-4 sm:p-5 flex flex-col gap-2">
+                      <p className="text-caption uppercase tracking-[0.14em] text-[var(--coral)]">Latest update</p>
+                      <h2 className="text-h3 text-white">
+                        {latest.updateTitle || latest.phaseTitle || latest.dayLabel || `Update ${latest.position}`}
+                      </h2>
+                      <p className="text-small text-white/45">
+                        {latest.dayLabel || `Log #${String(latest.position).padStart(3, "0")}`}
+                        {latest.phaseTitle ? ` · ${latest.phaseTitle}` : ""}
+                      </p>
+                      <p className="text-body text-white/80 leading-relaxed mt-1">
+                        {latest.summaryText || project.currentState || "No summary yet."}
+                      </p>
+                      {(latest as any).target || project.currentState ? (
+                        <p className="mt-2 rounded-lg bg-white/[0.04] border border-white/10 px-3 py-2 text-small text-white/70">
+                          <span className="text-white/40">Goal · </span>
+                          {(latest as any).target || project.currentState}
+                        </p>
+                      ) : null}
+                      {(latest.vodUrl || latest.liveUrl) && (
+                        <a
+                          href={latest.vodUrl || latest.liveUrl || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-auto text-small text-sky-300/80 hover:text-sky-200 underline w-fit"
+                        >
+                          Open full VOD
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </section>
+                </section>
+
+                {/* Earlier updates — compact horizontal rows */}
+                {rest.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-caption uppercase tracking-[0.14em] text-white/40 px-1">Earlier updates</p>
+                    {rest.map((n) => {
+                      const { media, isVideo } = renderMedia(n);
+                      return (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => setSelectedId(n.id)}
+                          className="w-full flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] px-2.5 py-2 text-left transition"
+                        >
+                          <div className="relative h-14 w-24 shrink-0 rounded-md overflow-hidden bg-[#0a0b0d]">
+                            {media && isVideo ? (
+                              <video
+                                src={String(media)}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                className="absolute inset-0 h-full w-full object-cover"
+                                onLoadedMetadata={(e) => {
+                                  try { e.currentTarget.currentTime = 0.05; } catch { /* */ }
+                                  e.currentTarget.pause();
+                                }}
+                              />
+                            ) : (
+                              <div className="absolute inset-0 bg-gradient-to-br from-[#1b2532] to-[#0a0b0d]" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-small font-medium text-white truncate">
+                              {n.updateTitle || n.phaseTitle || n.dayLabel || `Update ${n.position}`}
+                            </p>
+                            <p className="text-caption text-white/40 truncate mt-0.5">
+                              {n.dayLabel || `#${n.position}`}
+                              {n.summaryText ? ` · ${n.summaryText}` : ""}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             );
-          })}
+          })()}
         </div>
 
         {/* Owner help request — keep capability, quieter chrome */}

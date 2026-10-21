@@ -150,6 +150,15 @@ export default function LiveRoom() {
     const liveNode = [...nodes].reverse().find((n) => n.liveUrl && !n.sessionEndedAt);
     return liveNode?.liveUrl || null;
   }, [project]);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("wippo:live-session", { detail: { live: !!activeLiveUrl } })
+    );
+    return () => {
+      window.dispatchEvent(new CustomEvent("wippo:live-session", { detail: { live: false } }));
+    };
+  }, [activeLiveUrl]);
   const replayUrl = useMemo(() => {
     const nodes = project?.journeyNodes || [];
     const withVod = [...nodes].reverse().find((n) => n.vodUrl);
@@ -203,7 +212,7 @@ export default function LiveRoom() {
     };
 
     void loadPresence();
-    const id = window.setInterval(loadPresence, 15000);
+    const id = window.setInterval(loadPresence, 30000);
     return () => {
       stop = true;
       clearInterval(id);
@@ -230,7 +239,7 @@ export default function LiveRoom() {
     };
 
     void heartbeat();
-    const id = window.setInterval(heartbeat, 15000);
+    const id = window.setInterval(heartbeat, 30000);
     return () => {
       stop = true;
       window.clearInterval(id);
@@ -345,7 +354,7 @@ export default function LiveRoom() {
       return;
     }
     void loadActiveSession();
-    const timer = window.setInterval(loadActiveSession, 10_000);
+    const timer = window.setInterval(loadActiveSession, 20_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -400,7 +409,7 @@ export default function LiveRoom() {
     };
 
     void loadHelp();
-    const interval = window.setInterval(loadHelp, 15000);
+    const interval = window.setInterval(loadHelp, 30000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
@@ -585,7 +594,7 @@ export default function LiveRoom() {
       className="relative h-full overflow-hidden bg-[var(--page)] flex flex-col"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <header className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 px-3 sm:px-4 pt-3 pb-2 border-b border-[var(--line)] sm:flex sm:gap-3">
+      <header className="shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 pt-2.5 pb-2 border-b border-[var(--line)] sm:flex sm:gap-3">
         <button
           type="button"
           onClick={() => setLayer(0)}
@@ -704,7 +713,7 @@ export default function LiveRoom() {
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
         <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto px-3 sm:px-4 py-3 gap-3">
-          <div className="relative w-full flex-1 min-h-[14rem] lg:min-h-0 rounded-2xl overflow-hidden border border-white/[0.06] bg-[#0a0b0d] aspect-video lg:aspect-auto">
+          <div className="relative w-full flex-1 min-h-[11rem] sm:min-h-[14rem] lg:min-h-0 rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0b0d] aspect-video lg:aspect-auto">
               {embed?.embedUrl ? (
                 <iframe
                   title="Live session"
@@ -826,7 +835,7 @@ export default function LiveRoom() {
           {presenceError && <p role="status" className="text-[10px] text-red-300">{presenceError}</p>}
           {presenceActionError && <p role="alert" className="text-[10px] text-red-300">{presenceActionError}</p>}
 
-          <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 sm:px-4 py-3 sticky bottom-0 z-10 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
+          <section className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 sm:px-4 py-2.5 sm:py-3 relative z-10 sm:shadow-none">
             <div className="flex items-center justify-between gap-2 mb-3">
               <p className="text-[12px] font-semibold text-[var(--text)]">The journey so far</p>
               {projectLoading && (
@@ -868,7 +877,7 @@ export default function LiveRoom() {
           </section>
         </div>
 
-        <aside className="lg:w-[20rem] shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--line)] bg-[var(--surface)] flex flex-col min-h-[40vh] lg:min-h-0 max-h-[45vh] lg:max-h-none">
+        <aside className="lg:w-[20rem] shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--line)] bg-[var(--surface)] flex flex-col min-h-[32vh] lg:min-h-0 max-h-[38vh] lg:max-h-none">
           <div className="flex border-b border-[var(--line)] px-1 shrink-0">
             {(
               [

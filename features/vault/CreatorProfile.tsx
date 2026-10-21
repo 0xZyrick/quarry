@@ -340,14 +340,14 @@ export default function CreatorProfile({
       </div>
 
       <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6 pb-24 ">
-        {/* Identity block */}
-        <header className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141b26] via-[#111318] to-[#0e131c] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[var(--coral)]/12 blur-3xl" aria-hidden />
-          <div className="pointer-events-none absolute left-1/3 -bottom-12 h-28 w-28 rounded-full bg-[var(--growth)]/10 blur-2xl" aria-hidden />
+        {/* Identity block — Spotify-inspired profile hero */}
+        <header className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-[#2a3548] via-[#161d28] to-[#0e131c] p-0 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(255,118,95,0.22),transparent_55%),radial-gradient(ellipse_at_90%_30%,rgba(159,227,192,0.12),transparent_50%)]" aria-hidden />
+          <div className="relative px-5 sm:px-8 pt-10 pb-6 sm:pt-14 sm:pb-8">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <div className="relative shrink-0">
-                <Avatar handle={profile.handle} size={56} src={profile.avatarUrl} className="shrink-0" />
+                <Avatar handle={profile.handle} size={96} src={profile.avatarUrl} className="shrink-0" />
                 {profile.isSelf && (
                   <label className="absolute -bottom-1 -right-1 cursor-pointer rounded-full border border-white/20 bg-[#1a1d22] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white/70 hover:text-white hover:border-white/40">
                     Edit
@@ -387,7 +387,7 @@ export default function CreatorProfile({
                 )}
               </div>
               <div className="min-w-0">
-                <h1 className="text-h3 sm:text-h2 font-semibold text-white tracking-tight">
+                <h1 className="text-[2rem] sm:text-[3rem] font-bold text-white tracking-tight leading-none">
                   {profile.displayName || profile.handle}
                 </h1>
                 <p className="mt-0.5 text-[12px] text-white/55">
@@ -531,11 +531,12 @@ export default function CreatorProfile({
               </button>
             </form>
           )}
+                  </div>
         </header>
 
         {/* Active project journeys */}
         <section className="mt-6">
-          <h2 className="mb-4 text-caption font-semibold uppercase tracking-[0.14em] text-white/50">
+          <h2 className="mb-4 text-h4 font-semibold text-white">
             Active project journeys
           </h2>
           {profile.journeys.length === 0 ? (
@@ -578,7 +579,7 @@ export default function CreatorProfile({
 
         {/* Verified proof of work */}
         <section className="mt-6">
-          <h2 className="mb-4 text-caption font-semibold uppercase tracking-[0.14em] text-white/50">
+          <h2 className="mb-4 text-h4 font-semibold text-white">
             Verified proof of work &amp; help highlights
           </h2>
           <div className="rounded-xl border border-white/10 px-4 py-3">

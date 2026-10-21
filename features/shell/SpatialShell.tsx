@@ -27,7 +27,7 @@ import {navigateToRoute, routeFromPath} from "@/lib/appRoutes";
 import LoadingWorld from "../shared/LoadingWorld";
 import CommandPalette from "./CommandPalette";
 
-const SPRING = {type: "spring" as const, stiffness: 300, damping: 30};
+const SPRING = {type: "spring" as const, stiffness: 420, damping: 36};
 type G = {
   id: number;
   x: number;
@@ -60,6 +60,7 @@ export default function SpatialShell() {
   const [studioCodeBusy, setStudioCodeBusy] = useState(false);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [liveClock, setLiveClock] = useState("00:00");
+  const [isLiveSession, setIsLiveSession] = useState(false);
   const [size, setSize] = useState({w: 390});
   const [viewportReady, setViewportReady] = useState(false);
   const [routeReady, setRouteReady] = useState(false);
@@ -80,13 +81,28 @@ export default function SpatialShell() {
   const gr = useHubs((s) => !!s.greenroom[roomId]);
   const views = viewsFor(sec.room.type, gr);
 
-  // Live session clock when inside a room table
+  // Live session clock only for true live streams (not VOD / log reels)
   useEffect(() => {
-    if (layer === 2) {
-      setSessionStartedAt((prev) => prev ?? Date.now());
-    } else {
+    const onLive = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { live?: boolean } | boolean | undefined;
+      const live = typeof detail === "boolean" ? detail : !!detail?.live;
+      setIsLiveSession(live);
+      if (live) setSessionStartedAt((prev) => prev ?? Date.now());
+      else {
+        setSessionStartedAt(null);
+        setLiveMenuOpen(false);
+      }
+    };
+    window.addEventListener("wippo:live-session", onLive as EventListener);
+    return () => window.removeEventListener("wippo:live-session", onLive as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (layer !== 2) {
+      setIsLiveSession(false);
       setSessionStartedAt(null);
       setLiveMenuOpen(false);
+      window.dispatchEvent(new CustomEvent("wippo:live-session", { detail: { live: false } }));
     }
   }, [layer, roomId]);
 
@@ -135,8 +151,8 @@ export default function SpatialShell() {
     if (l !== 0) {
       // entering room
       if (inst && !rm) {
-        roomScale.set(1.3);
-        animate(roomScale, 1, {duration: 0.9, ease: [0.2, 0.7, 0.2, 1]});
+        roomScale.set(1.04);
+        animate(roomScale, 1, {duration: 0.28, ease: [0.2, 0.7, 0.2, 1]});
       }
     }
   }, []);
@@ -184,14 +200,7 @@ export default function SpatialShell() {
   useEffect(() => {
     const applyRoute = () => {
       const firstRoute = !routeInitialized.current;
-      if (!firstRoute) {
-        setRouteLoading(true);
-        setRouteReady(false);
-        if (routeLoadingTimer.current !== null) window.clearTimeout(routeLoadingTimer.current);
-      } else {
-        setRouteLoading(true);
-        setRouteReady(false);
-      }
+      if (routeLoadingTimer.current !== null) window.clearTimeout(routeLoadingTimer.current);
 
       let route = routeFromPath(window.location.pathname);
       if (window.location.pathname === "/" && route.kind !== "discover") {
@@ -199,6 +208,16 @@ export default function SpatialShell() {
         if (legacyLink) route = {kind: "room", id: legacyLink.roomId};
       }
       const guild = useGuild.getState();
+      // Only flash overlay on first paint or room/project entry — not Discover↔Studio tab flips
+      const heavy =
+        firstRoute ||
+        route.kind === "room" ||
+        route.kind === "project" ||
+        route.kind === "profile";
+      if (heavy) {
+        setRouteLoading(true);
+        setRouteReady(false);
+      }
       routeInitialized.current = true;
       if (route.kind === "studio" || route.kind === "discover") {
         useShellUi.setState({
@@ -226,7 +245,7 @@ export default function SpatialShell() {
         routeLoadingTimer.current = window.setTimeout(() => {
           setRouteReady(true);
           setRouteLoading(false);
-        }, firstRoute ? 220 : 260);
+        }, heavy ? (firstRoute ? 120 : 80) : 0);
       });
     };
     applyRoute();
@@ -489,7 +508,7 @@ export default function SpatialShell() {
               </kbd>
             </button>
 
-            {layer === 2 && (
+            {layer === 2 && isLiveSession && (
               <div className="relative">
                 <button
                   type="button"

@@ -8,13 +8,13 @@ export default function LoadingWorld({ overlay = false }: { overlay?: boolean })
       role="status"
       aria-live="polite"
       className={`grid place-items-center overflow-hidden bg-[var(--page)] ${
-        overlay ? "fixed inset-0 z-[100] backdrop-blur-md" : "min-h-[45vh] w-full"
+        overlay ? "fixed inset-0 z-[100] bg-[var(--page)]/92" : "min-h-[45vh] w-full"
       }`}
     >
       <motion.div
         initial={{ opacity: 0.25, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
         className="flex flex-col items-center gap-5"
       >
         <motion.div
