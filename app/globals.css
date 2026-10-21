@@ -41,6 +41,8 @@ body {
     var(--page);
   color: var(--text);
   font-family: "Space Grotesk", Inter, system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -131,12 +133,45 @@ body {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 .snap-item {
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  height: 100%;
 }
+@media (min-width: 640px) {
+  .sm\:snap-none {
+    scroll-snap-type: none;
+  }
+  .sm\:snap-align-none {
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+  }
+}
+
+/* Type scale — base 16px body, do not change font family */
+:root {
+  --text-h1: 2.25rem;      /* 36px */
+  --text-h1-sm: 1.875rem;  /* 30px mobile */
+  --text-h2: 1.5rem;       /* 24px */
+  --text-h3: 1.25rem;      /* 20px */
+  --text-h4: 1.125rem;     /* 18px */
+  --text-body: 1rem;       /* 16px */
+  --text-small: 0.875rem;  /* 14px */
+  --text-caption: 0.75rem; /* 12px */
+  --lh-tight: 1.2;
+  --lh-body: 1.5;
+}
+.text-h1 { font-size: var(--text-h1-sm); line-height: var(--lh-tight); font-weight: 600; }
+@media (min-width: 640px) {
+  .text-h1 { font-size: var(--text-h1); }
+}
+.text-h2 { font-size: var(--text-h2); line-height: var(--lh-tight); font-weight: 600; }
+.text-h3 { font-size: var(--text-h3); line-height: var(--lh-tight); font-weight: 600; }
+.text-h4 { font-size: var(--text-h4); line-height: var(--lh-tight); font-weight: 500; }
+.text-body { font-size: var(--text-body); line-height: var(--lh-body); }
+.text-small { font-size: var(--text-small); line-height: 1.4; }
+.text-caption { font-size: var(--text-caption); line-height: 1.35; }
 
 @keyframes pulse-ring {
   0% {

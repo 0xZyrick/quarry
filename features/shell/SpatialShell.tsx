@@ -423,60 +423,30 @@ export default function SpatialShell() {
       onPointerUp={undefined}
       onPointerCancel={undefined}
     >
-      {/* Global nav — identity · search · modes · live · profile */}
+      {/* Top nav — logo + Discover/Studio (mobile: slim; desktop: full tools) */}
       <header className="shrink-0 z-40 w-full border-b border-white/[0.05] bg-[#0B0C0E]/95 backdrop-blur-xl">
-        <div className="w-full h-14 sm:h-[3.75rem] px-2 sm:px-4 lg:px-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
-          {/* Left: logo + command bar */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => {
-                if (layer === 2) go(0);
-                navigateToRoute({ kind: "discover" });
-              }}
-              className="shrink-0 flex items-center gap-2.5 sm:gap-3"
-              aria-label="Wippo home"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/wippo-icon.png"
-                alt=""
-                className="h-8 w-8 sm:h-9 sm:w-9 object-contain shrink-0"
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/wippo-logo.png"
-                alt="Wippo"
-                className="h-7 sm:h-8 w-auto max-w-[9.5rem] sm:max-w-[11rem] object-contain object-left"
-              />
-            </button>
+        <div className="w-full h-12 sm:h-14 px-3 sm:px-4 lg:px-5 flex items-center justify-between gap-2 sm:gap-3">
+          {/* Left: logo */}
+          <button
+            type="button"
+            onClick={() => {
+              if (layer === 2) go(0);
+              navigateToRoute({ kind: "discover" });
+            }}
+            className="shrink-0 flex items-center"
+            aria-label="Wippo home"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/wippo-logo.png"
+              alt="Wippo"
+              className="h-7 sm:h-8 w-auto max-w-[7.5rem] sm:max-w-[11rem] object-contain object-left"
+            />
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setCmdOpen(true)}
-              className="hidden md:flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-left hover:bg-white/[0.05] transition"
-            >
-              <span className="text-white/35 text-[13px]">⌕</span>
-              <span className="truncate text-[12px] text-white/40">
-                Search canvases, goals, or builders…
-              </span>
-              <kbd className="ml-auto shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-white/30">
-                ⌘K
-              </kbd>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCmdOpen(true)}
-              className="md:hidden rounded-full w-9 h-9 grid place-items-center border border-white/[0.07] text-white/55"
-              aria-label="Search"
-            >
-              ⌕
-            </button>
-          </div>
-
-          {/* Center: Discover / Studio */}
+          {/* Center: Discover / Studio — always visible */}
           <nav
-            className="hidden sm:flex items-center gap-0.5 p-0.5 rounded-full border border-white/[0.08] bg-[#111318]/90"
+            className="flex items-center gap-0.5 p-0.5 rounded-full border border-white/[0.08] bg-[#111318]/90"
             aria-label="Primary"
           >
             {layer === 2 ? (
@@ -503,8 +473,22 @@ export default function SpatialShell() {
             )}
           </nav>
 
-          {/* Right: live pill · inbox · profile */}
+          {/* Right: desktop search + live + account (mobile tools live in bottom nav) */}
           <div className="flex items-center gap-1.5 sm:gap-2 justify-end min-w-0">
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              className="hidden md:flex min-w-0 max-w-xs items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-left hover:bg-white/[0.05] transition"
+            >
+              <span className="text-white/35 text-[13px]">⌕</span>
+              <span className="truncate text-[12px] text-white/40">
+                Search…
+              </span>
+              <kbd className="ml-auto shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-white/30">
+                ⌘K
+              </kbd>
+            </button>
+
             {layer === 2 && (
               <div className="relative">
                 <button
@@ -514,7 +498,7 @@ export default function SpatialShell() {
                   aria-expanded={liveMenuOpen}
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-[#10B981] animate-pulse" />
-                  <span className="hidden xs:inline sm:inline">LIVE</span>
+                  <span className="hidden sm:inline">LIVE</span>
                   <span className="tabular-nums">{liveClock}</span>
                 </button>
                 {liveMenuOpen && (
@@ -555,11 +539,12 @@ export default function SpatialShell() {
               </div>
             )}
 
+            {/* Desktop-only inbox + account; mobile uses bottom nav */}
             <button
               type="button"
               aria-label="Inbox"
               onClick={() => useShellUi.getState().openInbox()}
-              className="rounded-full w-9 h-9 grid place-items-center border border-white/[0.07] text-white/55 hover:text-white hover:bg-white/5"
+              className="hidden sm:grid rounded-full w-9 h-9 place-items-center border border-white/[0.07] text-white/55 hover:text-white hover:bg-white/5"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M4 6h16v12H4z" />
@@ -568,7 +553,7 @@ export default function SpatialShell() {
             </button>
 
             {signedIn ? (
-              <div className="relative">
+              <div className="relative hidden sm:block">
                 <button
                   type="button"
                   aria-label="Account menu"
@@ -579,19 +564,19 @@ export default function SpatialShell() {
                   <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--coral)]/20 text-[var(--coral)] font-bold">
                     {(account.name || "W").replace(/^@/, "").slice(0, 1).toUpperCase()}
                   </span>
-                  <span className="hidden sm:inline max-w-24 truncate">
+                  <span className="hidden md:inline max-w-24 truncate">
                     @{(account.name || "").replace(/^@/, "")}
                   </span>
                 </button>
                 {accountOpen && (
                   <div className="absolute right-0 top-11 z-50 w-52 rounded-2xl border border-white/10 bg-[#12151a]/95 p-2 shadow-2xl backdrop-blur-xl">
-                    <p className="px-3 py-2 text-[11px] text-white/45">Signed in as</p>
-                    <p className="px-3 pb-2 text-[13px] font-semibold text-white truncate">
+                    <p className="px-3 py-2 text-[12px] text-white/45">Signed in as</p>
+                    <p className="px-3 pb-2 text-[14px] font-semibold text-white truncate">
                       @{(account.name || "").replace(/^@/, "")}
                     </p>
                     <button
                       type="button"
-                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/80 hover:bg-white/[0.06]"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[14px] text-white/80 hover:bg-white/[0.06]"
                       onClick={() => {
                         setAccountOpen(false);
                         const handle = String(account.name || "")
@@ -604,7 +589,7 @@ export default function SpatialShell() {
                     </button>
                     <button
                       type="button"
-                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-white/80 hover:bg-white/[0.06]"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[14px] text-white/80 hover:bg-white/[0.06]"
                       onClick={() => {
                         setAccountOpen(false);
                         navigateToRoute({ kind: "studio" });
@@ -614,7 +599,7 @@ export default function SpatialShell() {
                     </button>
                     <button
                       type="button"
-                      className="w-full rounded-xl px-3 py-2 text-left text-[12px] text-red-300 hover:bg-white/[0.06]"
+                      className="w-full rounded-xl px-3 py-2 text-left text-[14px] text-red-300 hover:bg-white/[0.06]"
                       onClick={() => {
                         setAccountOpen(false);
                         clearAuth();
@@ -623,7 +608,7 @@ export default function SpatialShell() {
                       Sign out
                     </button>
                     {accountError && (
-                      <p role="alert" className="px-3 py-1 text-[10px] text-[var(--coral)]">
+                      <p role="alert" className="px-3 py-1 text-[12px] text-[var(--coral)]">
                         {accountError}
                       </p>
                     )}
@@ -638,7 +623,7 @@ export default function SpatialShell() {
                     new CustomEvent("wippo:auth", { detail: "sign in" })
                   )
                 }
-                className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/[0.06]"
+                className="hidden sm:inline-flex rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-white/[0.06]"
               >
                 Sign in
               </button>
@@ -649,7 +634,7 @@ export default function SpatialShell() {
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       {/* Content sits BELOW header — full remaining viewport */}
-      <div className="relative flex-1 min-h-0 w-full overflow-hidden">
+      <div className="relative flex-1 min-h-0 w-full overflow-hidden pb-14 sm:pb-0">
       {/* Content: feed | room */}
       <motion.div className="flex h-full" style={{width: size.w * 2, x: sx}}>
         <section
@@ -683,7 +668,74 @@ export default function SpatialShell() {
       <ModBanner />
       </div>{/* end content below header */}
 
-      {/* bottom nav removed — primary nav is top-left */}
+      {/* Mobile bottom nav — Home · Search · Messages · Profile */}
+      {layer !== 2 && (
+        <nav
+          className="sm:hidden fixed bottom-0 inset-x-0 z-50 border-t border-white/[0.08] bg-[#0B0C0E]/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]"
+          aria-label="Mobile primary"
+        >
+          <div className="grid grid-cols-4 h-14">
+            <button
+              type="button"
+              onClick={() => {
+                navigateToRoute({ kind: "discover" });
+                useShellUi.getState().setActiveTab("explore");
+              }}
+              className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+                activeTab === "explore" ? "text-[var(--cream)]" : "text-white/45"
+              }`}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z" />
+              </svg>
+              Home
+            </button>
+            <button
+              type="button"
+              onClick={() => setCmdOpen(true)}
+              className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-white/45"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              Search
+            </button>
+            <button
+              type="button"
+              onClick={() => useShellUi.getState().openInbox()}
+              className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-white/45"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M4 6h16v12H4z" />
+                <path d="m4 8 8 6 8-6" />
+              </svg>
+              Messages
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (signedIn) {
+                  const handle = String(account.name || "").replace(/^@/, "").toLowerCase();
+                  if (handle) navigateToRoute({ kind: "profile", handle });
+                  else useShellUi.getState().setActiveTab("profile");
+                } else {
+                  window.dispatchEvent(new CustomEvent("wippo:auth", { detail: "sign in" }));
+                }
+              }}
+              className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+                activeTab === "profile" ? "text-[var(--cream)]" : "text-white/45"
+              }`}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5 19.5c1.8-3.2 4.2-4.8 7-4.8s5.2 1.6 7 4.8" />
+              </svg>
+              Profile
+            </button>
+          </div>
+        </nav>
+      )}
       {routeProjectId && (
         <div className="fixed inset-0 z-[55] bg-[var(--page)]">
           <ProjectWorkspace
@@ -718,7 +770,7 @@ function TopTab({
         useShellUi.getState().setActiveTab(id);
         onClick();
       }}
-      className={`relative rounded-full px-2 sm:px-3 py-1.5 text-[10px] sm:text-[12px] font-medium transition-colors ${
+      className={`relative rounded-full px-2.5 sm:px-3.5 py-1.5 text-[12px] sm:text-[14px] font-medium transition-colors ${
         active ? "text-[var(--cream)] bg-white/10" : "text-[var(--text-muted)] hover:text-[var(--cream)]"
       }`}
     >

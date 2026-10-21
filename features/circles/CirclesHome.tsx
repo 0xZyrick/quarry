@@ -169,17 +169,17 @@ export default function CirclesHome() {
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0B0C0E]">
-      <div className="h-full max-w-[1600px] mx-auto flex flex-col px-3 sm:px-5 py-3 gap-3">
+      <div className="h-full max-w-[1600px] mx-auto flex flex-col px-3 sm:px-5 pt-3 pb-20 sm:pb-3 gap-3 overflow-y-auto sm:overflow-hidden">
         {(feedError || actionError) && (
           <p role="alert" className="text-[12px] text-red-300 shrink-0">{actionError || feedError}</p>
         )}
 
         {/* Split: launchpad 65% · network pulse 35% */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-3">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] gap-3 auto-rows-min lg:auto-rows-fr">
           {/* LEFT — Quick launchpad */}
-          <section className="min-h-0 flex flex-col rounded-2xl border border-white/[0.06] bg-[#111318] overflow-hidden">
+          <section className="min-h-0 flex flex-col rounded-xl border border-white/[0.06] bg-[#111318] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
             <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between gap-2">
-              <h1 className="text-[14px] font-semibold text-white">Your quick launchpad</h1>
+              <h1 className="text-h3 text-white">Your quick launchpad</h1>
               <button
                 type="button"
                 onClick={() => {
@@ -196,7 +196,7 @@ export default function CirclesHome() {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-white/35">Session context</p>
+                <p className="text-caption uppercase tracking-wider text-white/45">Session context</p>
                 <p className="text-[13px] text-white/70">
                   Pick a project, set 1–2 micro-goals, then start screen share into your table.
                 </p>
@@ -217,7 +217,7 @@ export default function CirclesHome() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-wider text-white/35">Your journeys</p>
+                <p className="text-caption uppercase tracking-wider text-white/45">Your journeys</p>
                 {loading && <p className="text-[12px] text-white/40">Loading…</p>}
                 {!loading && visible.length === 0 && (
                   <p className="text-[12px] text-white/40">No followed projects yet — start one or follow from Discover.</p>
@@ -324,7 +324,7 @@ export default function CirclesHome() {
         </div>
 
         {/* Bottom — recent log reels */}
-        <section className="shrink-0 rounded-2xl border border-white/[0.06] bg-[#111318] px-3 py-2.5">
+        <section className="shrink-0 rounded-xl border border-white/[0.06] bg-[#111318] px-3 py-3">
           <p className="text-[10px] uppercase tracking-wider text-white/35 mb-2 px-1">Recent video log reels</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {episodes.slice(0, 8).map((ep) => (

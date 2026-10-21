@@ -35,116 +35,6 @@ const STATUSES: { id: "all" | RoomStatus; label: string }[] = [
   { id: "offline", label: "Log reels" },
 ];
 
-/** Stock placeholders — shown only while real feed count is ≤ 8. */
-const STOCK_MOCKS: MatrixCard[] = [
-  {
-    id: "mock-1",
-    title: "Shader night pass",
-    projectTitle: "Little Worlds",
-    stack: "",
-    phaseLabel: "Alpha",
-    target: "Fix muddy night palette before the next live",
-    status: "live",
-    creatorHandle: "studio",
-    imageUrl: "https://picsum.photos/seed/wippo-mock1/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-2",
-    title: "Cursor trails",
-    projectTitle: "Wippo Engine",
-    stack: "",
-    phaseLabel: "Prototype",
-    target: "Spring physics easing on the pointer trail",
-    status: "needs_hand",
-    creatorHandle: "nia",
-    imageUrl: "https://picsum.photos/seed/wippo-mock2/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-3",
-    title: "Logo lockup",
-    projectTitle: "Brand Lab",
-    stack: "",
-    phaseLabel: "Idea",
-    target: "New logo mark that still feels handmade",
-    status: "offline",
-    creatorHandle: "ccardo",
-    imageUrl: "https://picsum.photos/seed/wippo-mock3/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-4",
-    title: "WebRTC ICE cleanup",
-    projectTitle: "Wippo Engine",
-    stack: "",
-    phaseLabel: "Deploy",
-    target: "Stop the ICE candidate leak on long sessions",
-    status: "live",
-    creatorHandle: "mike",
-    imageUrl: "https://picsum.photos/seed/wippo-mock4/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-5",
-    title: "Sky banding fix",
-    projectTitle: "Little Worlds",
-    stack: "",
-    phaseLabel: "Alpha",
-    target: "Unblock sky shader banding on mobile GPUs",
-    status: "offline",
-    creatorHandle: "ada",
-    imageUrl: "https://picsum.photos/seed/wippo-mock5/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-6",
-    title: "Table ambience",
-    projectTitle: "Focus Bench",
-    stack: "",
-    phaseLabel: "Prototype",
-    target: "Soft room tone that does not fight the mic",
-    status: "needs_hand",
-    creatorHandle: "jo",
-    imageUrl: "https://picsum.photos/seed/wippo-mock6/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-7",
-    title: "Quarry map pass",
-    projectTitle: "Building Quarry",
-    stack: "",
-    phaseLabel: "Alpha",
-    target: "Mesh the hub map without the hitch on pan",
-    status: "offline",
-    creatorHandle: "dracula",
-    imageUrl: "https://picsum.photos/seed/wippo-mock7/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-    hasVideo: true,
-  },
-  {
-    id: "mock-8",
-    title: "Diary of a builder",
-    projectTitle: "DOB",
-    stack: "",
-    phaseLabel: "Progress",
-    target: "Cut the weekly reel under ninety seconds",
-    status: "offline",
-    creatorHandle: "ekybaby",
-    imageUrl: "https://picsum.photos/seed/wippo-mock8/960/540",
-    mediaUrl: "https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-    hasVideo: true,
-  },
-]
-;
-
-
 export default function ExploreHome() {
   const { requireAuth } = useOnboarding();
   const [status, setStatus] = useState<"all" | RoomStatus>("all");
@@ -157,6 +47,7 @@ export default function ExploreHome() {
   /** Avoid hydration mismatch: localStorage demo flag only exists on the client */
   const [ready, setReady] = useState(false);
   const [demo, setDemo] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const getSafeMediaUrl = useCallback((value: unknown): string | null => {
     if (typeof value !== "string") return null;
@@ -168,6 +59,7 @@ export default function ExploreHome() {
 
   const load = useCallback(async () => {
     setLoadError("");
+    setLoading(true);
     if (demo) {
       setCards(
         DEMO_FEED.map((c) => ({
@@ -187,6 +79,7 @@ export default function ExploreHome() {
           helpId: c.helpId,
         }))
       );
+      setLoading(false);
       return;
     }
     try {
@@ -249,8 +142,10 @@ export default function ExploreHome() {
         return (b.imageUrl ? 1 : 0) - (a.imageUrl ? 1 : 0);
       });
       setCards(mapped);
+      setLoading(false);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not load projects.");
+      setLoading(false);
     }
   }, [demo, getSafeMediaUrl]);
 
@@ -287,31 +182,9 @@ export default function ExploreHome() {
   }, [ready, demo, load]);
 
   const filtered = useMemo(() => {
-    // Until mounted, keep empty so server HTML matches first client paint (no stock/demo leak).
     if (!ready) return [];
-    const sampleCards = DEMO_FEED.map((c) => ({
-      id: c.id,
-      title: c.title,
-      projectTitle: c.projectTitle,
-      stack: c.stack,
-      phaseLabel: c.phaseLabel,
-      target: c.target,
-      status: c.status,
-      people: c.people,
-      duration: c.duration,
-      creatorHandle: c.creatorHandle,
-      imageUrl: c.imageUrl,
-      mediaUrl: c.mediaUrl,
-      hasVideo: true as boolean,
-      helpId: c.helpId,
-    }));
-    // Guest: sample world. Signed-in: real feed, pad with samples until more than 8 reels.
-    const source = demo
-      ? (cards.length ? cards : sampleCards)
-      : cards.length > 8
-        ? cards
-        : [...cards, ...sampleCards];
-    return source.filter((c) => {
+    // Real feed only. Demo/guest still maps DEMO_FEED in load(); never pad signed-in with mocks.
+    return cards.filter((c) => {
       if (status !== "all" && c.status !== status) return false;
       const needle = query.trim().toLowerCase();
       if (!needle) return true;
@@ -319,7 +192,7 @@ export default function ExploreHome() {
         (value) => value && value.toLowerCase().includes(needle)
       );
     });
-  }, [cards, status, query, ready, demo]);
+  }, [cards, status, query, ready]);
 
   const walkIn = (id: string) => navigateToRoute({ kind: "room", id });
 
@@ -362,7 +235,7 @@ export default function ExploreHome() {
                 type="button"
                 aria-pressed={status === option.id}
                 onClick={() => setStatus(option.id)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition-colors ${
                   status === option.id
                     ? "bg-white text-[#0B0C0E]"
                     : "text-white/55 hover:text-white hover:bg-white/[0.06]"
@@ -381,7 +254,7 @@ export default function ExploreHome() {
           </div>
         </div>
 
-        <main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pb-8">
+        <main className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 pb-20 sm:pb-8 snap-y-feed sm:snap-none">
           {actionError && <p role="alert" className="mb-3 text-[12px] text-red-300">{actionError}</p>}
           {loadError && (
             <div role="alert" className="rounded-xl border border-red-400/20 bg-red-400/[0.05] p-4 mb-4">
@@ -396,21 +269,21 @@ export default function ExploreHome() {
             </div>
           )}
 
-          {!loadError && cards.length === 0 && (
-            <div className="grid min-h-[40vh] place-items-center text-center">
-              <div>
-                <p className="text-[15px] font-medium text-white/90">No sessions yet</p>
-                <p className="mt-1 text-[13px] text-white/45">When builders go live or post log reels, they show here.</p>
+          {!loadError && ready && !loading && cards.length === 0 && (
+            <div className="grid min-h-[30vh] place-items-center text-center px-6">
+              <div className="max-w-sm">
+                <p className="text-body text-white/55">Discover is quiet right now</p>
+                <p className="mt-1 text-small text-white/35">Live sessions and log reels will appear here as builders post.</p>
               </div>
             </div>
           )}
 
           {cards.length > 0 && filtered.length === 0 && (
-            <p className="py-16 text-center text-[13px] text-white/45">Nothing in this filter.</p>
+            <p className="py-12 text-center text-small text-white/40">Nothing in this filter.</p>
           )}
 
           {/* Video-first masonry-ish grid */}
-          <div className="columns-1 sm:columns-2 gap-3 space-y-3">
+          <div className="flex flex-col gap-3 sm:block sm:columns-2 sm:gap-3 sm:space-y-3">
             {filtered.map((c) => {
               const isHover = hoverId === c.id;
               const isLive = c.status === "live";
@@ -441,12 +314,12 @@ export default function ExploreHome() {
                       video.currentTime = 0;
                     }
                   }}
-                  className={`break-inside-avoid relative overflow-hidden rounded-2xl bg-[#111318] group ${
+                  className={`break-inside-avoid relative overflow-hidden rounded-lg bg-[#111318] group snap-item sm:snap-align-none min-h-[calc(100dvh-8.5rem)] sm:min-h-0 ${
                     isHelp ? "ring-1 ring-[#F59E0B]/50" : isLive ? "ring-1 ring-[#10B981]/35" : ""
                   } cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/40`}
                 >
                   {/* Full-bleed media with text overlays */}
-                  <div className="relative aspect-video bg-[#0a0b0d] overflow-hidden">
+                  <div className="relative aspect-[9/16] sm:aspect-video min-h-[calc(100dvh-8.5rem)] sm:min-h-0 h-full bg-[#0a0b0d] overflow-hidden">
                     {videoPreview ? (
                       <>
                         {/* Poster always underneath so empty/black video never wins */}
@@ -460,28 +333,31 @@ export default function ExploreHome() {
                         ) : null}
                         <video
                           key={c.mediaUrl || c.id}
-                          src={c.mediaUrl || undefined}
+                          src={isHover ? (c.mediaUrl || undefined) : undefined}
                           poster={c.imageUrl || undefined}
                           muted
                           playsInline
                           loop
-                          autoPlay
-                          preload="auto"
+                          preload="none"
                           controls={false}
                           ref={(el) => {
                             if (!el) return;
                             el.muted = true;
-                            const tryPlay = () => void el.play().catch(() => {});
-                            if (el.readyState >= 2) tryPlay();
-                            else el.addEventListener("loadeddata", tryPlay, { once: true });
+                            if (isHover) {
+                              void el.play().catch(() => {});
+                            } else {
+                              el.pause();
+                              el.removeAttribute("src");
+                              el.load();
+                            }
                           }}
                           onTimeUpdate={(event) => {
-                            if (event.currentTarget.currentTime >= 20) {
+                            if (event.currentTarget.currentTime >= 12) {
                               event.currentTarget.currentTime = 0;
                             }
                           }}
-                          className={`absolute inset-0 h-full w-full object-cover transition duration-700 ${
-                            isHover ? "scale-[1.05] opacity-100" : "scale-100 opacity-95"
+                          className={`absolute inset-0 h-full w-full object-cover transition duration-500 ${
+                            isHover ? "scale-[1.03] opacity-100" : "scale-100 opacity-0"
                           }`}
                         />
                       </>
@@ -543,7 +419,7 @@ export default function ExploreHome() {
                           else walkIn(c.id);
                         }}
                         disabled={claimingHelpId === c.helpId || c.id.startsWith("mock-")}
-                        className="block max-w-[95%] text-left text-[14px] sm:text-[15px] font-semibold leading-snug line-clamp-2 text-white drop-shadow-[0_1px_8px_rgba(0,0,0,.85)] hover:text-white/90 transition-colors"
+                        className="block max-w-[95%] text-left text-[16px] sm:text-[18px] font-semibold leading-snug line-clamp-2 text-white drop-shadow-[0_1px_8px_rgba(0,0,0,.85)] hover:text-white/90 transition-colors"
                       >
                         {c.target || c.title || "Open room"}
                       </button>
@@ -554,7 +430,7 @@ export default function ExploreHome() {
                           if (c.id.startsWith("mock-")) return;
                           useShellUi.getState().openVault(c.creatorHandle);
                         }}
-                        className="block text-left text-[11px] text-white/55 drop-shadow-[0_1px_6px_rgba(0,0,0,.7)] hover:text-white/80"
+                        className="block text-left text-[14px] text-white/55 drop-shadow-[0_1px_6px_rgba(0,0,0,.7)] hover:text-white/80"
                       >
                         @{c.creatorHandle}
                       </button>

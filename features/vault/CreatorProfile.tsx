@@ -331,7 +331,7 @@ export default function CreatorProfile({
   const focusHours = profile.activityWeeks.filter(Boolean).length * 4;
 
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-[#0B0C0E] z-50">
+    <div className="absolute inset-0 overflow-y-auto bg-[#0B0C0E] z-50 pb-16 sm:pb-0">
       <div className="sticky top-0 z-20 border-b border-white/10 bg-[#0B0C0E]/95 backdrop-blur-md px-3 sm:px-6 py-2.5 flex items-center gap-2">
         <button type="button" onClick={close} className="text-[12px] text-white/50 hover:text-white">
           ← Back
@@ -339,9 +339,11 @@ export default function CreatorProfile({
         <span className="text-[12px] text-white/35 truncate">@{profile.handle}</span>
       </div>
 
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6 pb-24 font-mono">
-        {/* Wireframe identity block */}
-        <header className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6 pb-24 ">
+        {/* Identity block */}
+        <header className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141b26] via-[#111318] to-[#0e131c] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[var(--coral)]/12 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute left-1/3 -bottom-12 h-28 w-28 rounded-full bg-[var(--growth)]/10 blur-2xl" aria-hidden />
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <div className="relative shrink-0">
@@ -385,7 +387,7 @@ export default function CreatorProfile({
                 )}
               </div>
               <div className="min-w-0">
-                <h1 className="text-[18px] sm:text-[20px] font-semibold text-white tracking-tight">
+                <h1 className="text-h3 sm:text-h2 font-semibold text-white tracking-tight">
                   {profile.displayName || profile.handle}
                 </h1>
                 <p className="mt-0.5 text-[12px] text-white/55">
@@ -533,7 +535,7 @@ export default function CreatorProfile({
 
         {/* Active project journeys */}
         <section className="mt-6">
-          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
+          <h2 className="mb-4 text-caption font-semibold uppercase tracking-[0.14em] text-white/50">
             Active project journeys
           </h2>
           {profile.journeys.length === 0 ? (
@@ -547,7 +549,7 @@ export default function CreatorProfile({
                   key={j.id}
                   type="button"
                   onClick={() => useShellUi.getState().openProject(j.id)}
-                  className="rounded-2xl border border-white/10 bg-[#111318] overflow-hidden text-left hover:border-white/25 hover:bg-white/[0.03] transition-colors"
+                  className="rounded-xl border border-white/10 bg-[#111318] overflow-hidden text-left hover:border-white/25 hover:bg-white/[0.04] transition-all duration-200 shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
                 >
                   <div className="relative aspect-video bg-[#0a0b0d]">
                     {j.cover ? (
@@ -576,7 +578,7 @@ export default function CreatorProfile({
 
         {/* Verified proof of work */}
         <section className="mt-6">
-          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
+          <h2 className="mb-4 text-caption font-semibold uppercase tracking-[0.14em] text-white/50">
             Verified proof of work &amp; help highlights
           </h2>
           <div className="rounded-xl border border-white/10 px-4 py-3">

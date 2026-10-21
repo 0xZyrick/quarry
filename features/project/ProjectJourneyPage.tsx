@@ -466,20 +466,22 @@ export default function ProjectJourneyPage({
 
   return (
     <div className="absolute inset-0 overflow-y-auto bg-[#0B0C0E] z-20">
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 pt-4 pb-24 font-mono">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 pt-4 pb-28 sm:pb-24">
         <button
           type="button"
           onClick={onClose}
-          className="mb-4 text-[12px] text-white/45 hover:text-white"
+          className="mb-4 text-small text-white/45 hover:text-white transition-colors"
         >
           ← Back
         </button>
 
         {/* Wireframe header */}
-        <header className="mb-6 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 text-[13px] sm:text-[14px] text-white tracking-wide">
-              <span className="font-semibold uppercase">{project.title}</span>
+        <header className="mb-8 relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#141b26] via-[#111318] to-[#0e131c] px-5 py-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-[var(--coral)]/10 blur-3xl" />
+          <div className="pointer-events-none absolute -left-6 bottom-0 h-24 w-24 rounded-full bg-[var(--growth)]/10 blur-2xl" />
+          <div className="relative flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 text-body text-white tracking-wide">
+              <span className="text-h3 font-semibold">{project.title}</span>
               <span className="text-white/40"> · By </span>
               <button
                 type="button"
@@ -537,7 +539,7 @@ export default function ProjectJourneyPage({
                 <button
                   type="button"
                   onClick={() => setSelectedId(n.id)}
-                  className="w-full px-4 py-2.5 text-left text-[12px] sm:text-[13px] text-white/90 border-b border-white/10 hover:bg-white/[0.02]"
+                  className="w-full px-4 py-3 text-left text-small sm:text-body text-white/90 border-b border-white/10 hover:bg-white/[0.02]"
                 >
                   <span className="text-white/50">[ LOG #{String(n.position).padStart(3, "0")} ]</span>
                   <span className="text-white/40"> — </span>
