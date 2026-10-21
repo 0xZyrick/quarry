@@ -2,22 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getSupabaseAdmin, MEDIA_BUCKET } from "@/lib/supabaseAdmin";
 import { unlockedStudioSession } from "@/lib/server/studioAccess";
+import { readSession } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Max 40MB — keep shorts + images light on free tier */
 const MAX_BYTES = 40 * 1024 * 1024;
+/** Profile / cover images should stay smaller */
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 /**
  * POST multipart field "file"
- * → Supabase Storage bucket (public URL for mosaic)
- * Falls back to local public/uploads only if Supabase env is missing (local dev).
+ * → Supabase Storage bucket (public URL)
+ * Falls back to local public/uploads if Supabase env is missing (local dev).
+ *
+ * Images: any signed-in user (profile photo, covers)
+ * Video: requires Studio unlock
  */
 export async function POST(req: NextRequest) {
-  if (!(await unlockedStudioSession(req))) {
-    return NextResponse.json({ error: "Unlock Studio before uploading media." }, { status: 403 });
+  const session = readSession(req);
+  if (!session) {
+    return NextResponse.json({ error: "Sign in to upload." }, { status: 401 });
   }
+
   try {
     const form = await req.formData();
     const file = form.get("file");
@@ -25,14 +33,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "file required" }, { status: 400 });
     }
     const blob = file as File;
-    if (blob.size > MAX_BYTES) {
-      return NextResponse.json({ error: "file too large (max 40MB)" }, { status: 400 });
-    }
     const type = blob.type || "";
     const isImage = type.startsWith("image/");
     const isVideo = type.startsWith("video/");
     if (!isImage && !isVideo) {
       return NextResponse.json({ error: "image or video only" }, { status: 400 });
+    }
+
+    if (isVideo) {
+      if (!(await unlockedStudioSession(req))) {
+        return NextResponse.json(
+          { error: "Unlock Studio before uploading video." },
+          { status: 403 }
+        );
+      }
+      if (blob.size > MAX_BYTES) {
+        return NextResponse.json({ error: "file too large (max 40MB)" }, { status: 400 });
+      }
+    } else if (blob.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: "Image too large (max 8MB)." }, { status: 400 });
     }
 
     const ext =

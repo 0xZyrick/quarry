@@ -338,30 +338,50 @@ export default function CreatorProfile({
                       accept="image/*"
                       className="hidden"
                       onChange={async (e) => {
-                        const file = e.target.files?.[0];
+                        const input = e.target;
+                        const file = input.files?.[0];
                         if (!file) return;
                         const uid = currentUid();
-                        if (!uid) return;
+                        if (!uid) {
+                          setProfileError("Sign in again to update your photo.");
+                          return;
+                        }
+                        if (!file.type.startsWith("image/")) {
+                          setProfileError("Choose an image file.");
+                          return;
+                        }
+                        if (file.size > 8 * 1024 * 1024) {
+                          setProfileError("Image is too large (max 8MB).");
+                          return;
+                        }
+                        setProfileError("");
                         try {
-                          const reader = new FileReader();
-                          reader.onload = async () => {
-                            const dataUrl = String(reader.result || "");
-                            if (dataUrl.length > 500_000) {
-                              setProfileError("Image is too large. Try a smaller photo.");
-                              return;
-                            }
-                            const response = await fetch("/api/profile", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ userId: uid, avatarUrl: dataUrl }),
-                            });
-                            const result = await response.json().catch(() => ({}));
-                            if (!response.ok) throw new Error(result.error || "Could not update photo.");
-                            setProfile((p) => (p ? { ...p, avatarUrl: dataUrl } : p));
-                          };
-                          reader.readAsDataURL(file);
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          const up = await fetch("/api/upload", { method: "POST", body: fd });
+                          const upJson = await up.json().catch(() => ({}));
+                          if (!up.ok) {
+                            throw new Error(upJson.error || "Could not upload photo.");
+                          }
+                          const url = upJson.url as string;
+                          if (!url) throw new Error("Upload returned no URL.");
+
+                          const response = await fetch("/api/profile", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ userId: uid, avatarUrl: url }),
+                          });
+                          const result = await response.json().catch(() => ({}));
+                          if (!response.ok) {
+                            throw new Error(result.error || "Could not save photo.");
+                          }
+                          setProfile((p) => (p ? { ...p, avatarUrl: url } : p));
                         } catch (error) {
-                          setProfileError(error instanceof Error ? error.message : "Could not update photo.");
+                          setProfileError(
+                            error instanceof Error ? error.message : "Could not update photo."
+                          );
+                        } finally {
+                          input.value = "";
                         }
                       }}
                     />
