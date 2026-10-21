@@ -425,9 +425,9 @@ export default function SpatialShell() {
     >
       {/* Global nav — identity · search · modes · live · profile */}
       <header className="shrink-0 z-40 w-full border-b border-white/[0.05] bg-[#0B0C0E]/95 backdrop-blur-xl">
-        <div className="w-full h-14 sm:h-[3.75rem] px-2 sm:px-4 lg:px-5 flex items-center gap-2 sm:gap-3">
+        <div className="w-full h-14 sm:h-[3.75rem] px-2 sm:px-4 lg:px-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
           {/* Left: logo + command bar */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => {
@@ -504,7 +504,7 @@ export default function SpatialShell() {
           </nav>
 
           {/* Right: live pill · inbox · profile */}
-          <div className="flex items-center gap-1.5 sm:gap-2 justify-end shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 justify-end min-w-0">
             {layer === 2 && (
               <div className="relative">
                 <button

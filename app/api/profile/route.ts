@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/db";
 import { weeksShipped, countShippedWeeks } from "@/lib/activityGrid";
-import { readSession } from "@/lib/server/session";
+import { readSession, cookieFor } from "@/lib/server/session";
 
 
 const KIND_LABEL: Record<string, string> = {
@@ -226,9 +226,14 @@ export async function PATCH(req: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.uid },
       data,
-      select: { id: true, handle: true, displayName: true, bio: true, avatarUrl: true },
+      select: { id: true, handle: true, displayName: true, bio: true, avatarUrl: true, accountTrack: true },
     });
-    return NextResponse.json({ user });
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (user.handle) {
+      const track = user.accountTrack === "client" ? "client" : user.accountTrack === "creator" ? "creator" : session.track;
+      headers.append("Set-Cookie", cookieFor({ uid: user.id, handle: user.handle, track }));
+    }
+    return new NextResponse(JSON.stringify({ user }), { status: 200, headers });
   } catch (error) {
     console.error("PATCH /api/profile", error);
     return NextResponse.json({ error: "Could not update your profile." }, { status: 500 });

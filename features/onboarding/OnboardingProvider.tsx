@@ -24,7 +24,7 @@ type Api = {
   data: Onboarding;
   ready: boolean;
   complete: boolean;
-    active: boolean;
+  active: boolean;
   signedIn: boolean;
   update: (p: Partial<Onboarding>) => void;
   requireAuth: (reason: string, onContinue?: () => void) => void;
@@ -45,6 +45,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [bypass, setBypass] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authReason, setAuthReason] = useState("");
+  const [landingAuth, setLandingAuth] = useState(false);
   const dataRef = useRef(data);
   const pendingAuthAction = useRef<(() => void) | null>(null);
   dataRef.current = data;
@@ -81,9 +82,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     dataRef.current = { ...EMPTY };
     setData({ ...EMPTY });
     useGuild.setState({ profile: null, profileReady: true });
+    setLandingAuth(true);
+    setAuthOpen(true);
+    setAuthReason("Create your account");
   }, []);
 
   const requireAuth = useCallback((reason: string, onContinue?: () => void) => {
+    setLandingAuth(false);
     setAuthReason(reason || "continue");
     pendingAuthAction.current = onContinue ?? null;
     setAuthOpen(true);
@@ -91,17 +96,33 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const signedIn = isSignedIn(data);
   const complete = isComplete(data);
-  const active = ready && (bypass || canUseApp(data));
+  // App is usable once signed in (or guest explored / dev bypass)
+  const active = ready && (bypass || signedIn || !!data.explored);
 
-  // Resolve the server-derived room roles after sign-in; do not invent a client-side role.
+  // Landing gate: show auth as the first screen until signed in (or guest explored)
+  useEffect(() => {
+    if (!ready || bypass) return;
+    if (!signedIn && !data.explored) {
+      setLandingAuth(true);
+      setAuthReason("Create your account");
+      setAuthOpen(true);
+    } else if (signedIn) {
+      setLandingAuth(false);
+      setAuthOpen(false);
+    }
+  }, [ready, bypass, signedIn, data.explored]);
+
   useEffect(() => {
     if (!ready) return;
     if (signedIn && data.uid && data.name) {
-      profileAdapter.get().then((profile) => {
-        useGuild.setState({ profile, profileReady: true });
-      }).catch(() => {
-        useGuild.setState({ profile: null, profileReady: true });
-      });
+      profileAdapter
+        .get()
+        .then((profile) => {
+          useGuild.setState({ profile, profileReady: true });
+        })
+        .catch(() => {
+          useGuild.setState({ profile: null, profileReady: true });
+        });
     } else {
       useGuild.setState({ profile: null, profileReady: true });
     }
@@ -109,7 +130,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     const onAuth = (event: Event) => {
-      const detail = (event as CustomEvent<string | { reason?: string; onContinue?: () => void }>).detail;
+      const detail = (
+        event as CustomEvent<string | { reason?: string; onContinue?: () => void }>
+      ).detail;
       if (typeof detail === "string") requireAuth(detail);
       else requireAuth(detail?.reason || "continue", detail?.onContinue);
     };
@@ -139,15 +162,19 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     <Ctx.Provider value={api}>
       {children}
 
-      {/* Account entry is shown only when a protected action requests it. */}
       <AuthModal
         open={authOpen}
         reason={authReason}
+        landing={landingAuth}
         onClose={() => {
+          // Landing gate only closes via success (sign-in or guest explore)
+          if (landingAuth && !dataRef.current.explored && !isSignedIn(dataRef.current)) return;
           pendingAuthAction.current = null;
+          setLandingAuth(false);
           setAuthOpen(false);
         }}
         onSuccess={() => {
+          setLandingAuth(false);
           setAuthOpen(false);
           const action = pendingAuthAction.current;
           pendingAuthAction.current = null;

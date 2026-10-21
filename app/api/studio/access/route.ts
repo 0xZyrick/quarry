@@ -20,9 +20,7 @@ export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) return json({ error: "forbidden" }, 403);
   const session = getIdentity(req).session;
   if (!session) return json({ error: "Sign in to unlock Studio." }, 401);
-  if (session.track !== "creator") {
-    return json({ error: "Studio access is for builder accounts." }, 403);
-  }
+  // Track gate removed — unlock is code-based for any signed-in account.
   if (!(await limit(`studio-code:${session.uid}:${ipOf(req)}`, 12, 60_000))) {
     return json({ error: "Too many attempts. Try again in a minute." }, 429);
   }

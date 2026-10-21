@@ -1,12 +1,11 @@
 /**
- * PostHog analytics
+ * PostHog analytics — reverse proxy via t.wippo.online (EU)
  *
- * Required in .env.local (restart `next dev` after changing):
- *   NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_xxxxxxxx
- *   NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
- *   (EU projects: https://eu.i.posthog.com)
+ * Required in .env.local (restart next dev after changing):
+ *   NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_...
+ *   NEXT_PUBLIC_POSTHOG_HOST=https://t.wippo.online
  *
- * Install once: npm i posthog-js
+ * ui_host stays eu.posthog.com so toolbar / links resolve correctly through the proxy.
  */
 
 type Props = Record<string, string | number | boolean | null | undefined>;
@@ -53,15 +52,15 @@ export async function initAnalytics() {
       return;
     }
 
+    // Managed reverse proxy (Live). Fall back only if env is unset.
     const host = (
-      process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com"
+      process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://t.wippo.online"
     ).replace(/\/$/, "");
 
     try {
       const mod = await import("posthog-js");
       posthog = mod.default;
 
-      // Avoid reinitializing PostHog if another bundle already initialized it.
       if (posthog.__loaded) {
         ready = true;
         flushQueue();
@@ -70,7 +69,9 @@ export async function initAnalytics() {
 
       posthog.init(key, {
         api_host: host,
-        ui_host: host.includes("eu.") ? "https://eu.posthog.com" : "https://us.posthog.com",
+        // Required when using a reverse proxy so links/toolbar point back to PostHog EU
+        ui_host: "https://eu.posthog.com",
+        defaults: "2026-05-30",
         person_profiles: "identified_only",
         capture_pageview: "history_change",
         capture_pageleave: true,

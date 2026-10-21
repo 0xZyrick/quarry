@@ -15,9 +15,13 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
 
   const email = normalizeEmail(body.email);
-  const handle = cleanName(body.name);
   if (!email) return json({ error: "Enter a valid email address." }, 400);
-  if (!handle) return json({ error: "Pick a name of 2 to 24 letters or numbers." }, 400);
+  // Handle is optional at signup — a temporary one is used until the user picks a username after OTP.
+  let handle = cleanName(body.name);
+  if (!handle) {
+    const local = email.split("@")[0].replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "user";
+    handle = `${local}${Date.now().toString(36).slice(-4)}`.slice(0, 24);
+  }
   const track = body.track === "client" ? "client" : "creator";
   if (!hasEmailAuthConfig()) {
     return json({ error: "Email sign-in isn't configured. Set the Supabase Auth environment variables." }, 503);

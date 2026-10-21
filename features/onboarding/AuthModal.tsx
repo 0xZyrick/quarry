@@ -8,59 +8,75 @@ type Props = {
   reason?: string;
   onClose: () => void;
   onSuccess?: () => void;
+  /** When true, this is the landing gate — close is hidden, guest still allowed */
+  landing?: boolean;
 };
 
 type Mode = "join" | "signin" | "link";
-type JoinStep = "email" | "handle";
+type Step = "email" | "otp" | "profile";
 
-export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
+export default function AuthModal({ open, reason, onClose, onSuccess, landing }: Props) {
   const { update, data } = useOnboarding();
   const [mode, setMode] = useState<Mode>("join");
-  const [joinStep, setJoinStep] = useState<JoinStep>("email");
+  const [step, setStep] = useState<Step>("email");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
-  const [track, setTrack] = useState<"creator" | "client">(data.track === "client" ? "client" : "creator");
+  const [studioCode, setStudioCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [accountId, setAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setMode(reason?.toLowerCase().includes("email sign-in") ? "link" : "join");
-    setJoinStep("email");
+    const r = (reason || "").toLowerCase();
+    setMode(r.includes("email sign-in") || r.includes("link") ? "link" : r.includes("sign in") || r.includes("welcome back") ? "signin" : "join");
+    setStep("email");
     setOtpSent(false);
     setEmail("");
     setName("");
     setToken("");
+    setStudioCode("");
+    setAccountId(null);
     setErr("");
   }, [open, reason]);
+
+  const finish = (uid: string, handle: string, track?: string | null) => {
+    update({
+      uid,
+      name: handle,
+      auth: "invite",
+      explored: true,
+      track: (track as "creator" | "client" | "guest") || "creator",
+    });
+    onSuccess?.();
+    onClose();
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy) return;
     setErr("");
 
-    if (!otpSent && mode === "join" && joinStep === "email") {
+    // —— EMAIL → request OTP ——
+    if (step === "email") {
       if (!email.trim()) {
         setErr("Enter your email address.");
         return;
       }
-      setJoinStep("handle");
-      return;
-    }
-
-    setBusy(true);
-    try {
-      if (!otpSent) {
-        const endpoint = mode === "join"
-          ? "/api/invite"
-          : mode === "link"
-            ? "/api/auth/email/link"
-            : "/api/auth/email/request";
-        const body = mode === "join"
-          ? { name: name.trim(), email: email.trim(), track }
-          : { email: email.trim() };
+      setBusy(true);
+      try {
+        const endpoint =
+          mode === "join"
+            ? "/api/invite"
+            : mode === "link"
+              ? "/api/auth/email/link"
+              : "/api/auth/email/request";
+        const body =
+          mode === "join"
+            ? { email: email.trim(), track: "creator" }
+            : { email: email.trim() };
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -69,40 +85,129 @@ export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || "Could not send a verification code.");
         setOtpSent(true);
+        setStep("otp");
+      } catch (error) {
+        setErr(error instanceof Error ? error.message : "Could not continue. Try again.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // —— OTP → verify ——
+    if (step === "otp") {
+      if (!token.trim()) {
+        setErr("Enter the code from your email.");
         return;
       }
+      setBusy(true);
+      try {
+        const response = await fetch("/api/auth/email/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), token: token.trim() }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "Could not verify your email.");
+        const account = result.account;
+        if (!account?.id) throw new Error("Verified account response was incomplete.");
 
-      const response = await fetch("/api/auth/email/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), token: token.trim() }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Could not verify your email.");
-      const account = result.account;
-      if (!account?.id || !account?.handle) throw new Error("Verified account response was incomplete.");
-      update({
-        uid: account.id,
-        name: account.handle,
-        auth: "invite",
-        explored: true,
-        track: account.track || track,
-      });
-      onSuccess?.();
-      onClose();
-    } catch (error) {
-      setErr(error instanceof Error ? error.message : "Could not continue. Try again.");
-    } finally {
-      setBusy(false);
+        // New join accounts always go through username step
+        if (mode === "join") {
+          setAccountId(account.id);
+          // Pre-fill if server already has a real-looking handle
+          const h = String(account.handle || "").replace(/^@/, "");
+          if (h && !/^\d+$/.test(h) && h.length >= 2) setName(h);
+          setStep("profile");
+          return;
+        }
+
+        finish(account.id, account.handle, account.track);
+      } catch (error) {
+        setErr(error instanceof Error ? error.message : "Could not continue. Try again.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // —— PROFILE → username + optional studio code ——
+    if (step === "profile") {
+      const handle = name.trim().replace(/^@/, "").replace(/\s/g, "");
+      if (handle.length < 2) {
+        setErr("Choose a username (at least 2 characters).");
+        return;
+      }
+      setBusy(true);
+      try {
+        const uid = accountId || data.uid;
+        if (!uid) throw new Error("Session missing. Request a new code.");
+
+        const profileRes = await fetch("/api/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: uid, handle }),
+        });
+        const profileJson = await profileRes.json().catch(() => ({}));
+        if (!profileRes.ok) {
+          throw new Error(profileJson.error || "That username isn’t available.");
+        }
+
+        const finalHandle = profileJson.user?.handle || handle;
+
+        // Optional studio unlock
+        if (studioCode.trim()) {
+          const studioRes = await fetch("/api/studio/access", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: studioCode.trim() }),
+          });
+          // Soft-fail: bad code should not block account creation
+          if (!studioRes.ok) {
+            const sj = await studioRes.json().catch(() => ({}));
+            setErr(sj.error || "Account created, but that studio code wasn’t valid.");
+            // still finish — user can unlock later
+          }
+        }
+
+        finish(uid, finalHandle, "creator");
+      } catch (error) {
+        setErr(error instanceof Error ? error.message : "Could not finish setup. Try again.");
+      } finally {
+        setBusy(false);
+      }
     }
   };
 
   const continueAsGuest = () => {
     update({ explored: true, auth: "guest", name: "", uid: "", track: "guest" });
+    onSuccess?.();
     onClose();
   };
 
   if (!open) return null;
+
+  const title =
+    step === "otp"
+      ? "Check your inbox"
+      : step === "profile"
+        ? "Choose your username"
+        : mode === "join"
+          ? "Create your account"
+          : mode === "link"
+            ? "Add sign-in email"
+            : "Welcome back";
+
+  const subtitle =
+    step === "otp"
+      ? `Enter the one-time code sent to ${email}.`
+      : step === "profile"
+        ? "This is how others will find you. Studio code is optional."
+        : mode === "join"
+          ? "Enter your email to get a verification code."
+          : mode === "link"
+            ? "Verify an email so you can recover this account."
+            : "We’ll email you a one-time sign-in code.";
 
   return (
     <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#080b11] text-white">
@@ -110,64 +215,66 @@ export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
         <section className="flex min-h-full flex-col justify-center px-5 py-8 sm:px-10 lg:px-14">
           <div className="mx-auto w-full max-w-md">
             <div className="mb-7 flex items-center justify-between">
-              <a href="/discover" aria-label="Wippo Discover">
+              <a href="/" aria-label="Wippo">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/brand/wippo-logo.png" alt="Wippo" className="h-8 w-auto object-contain" />
               </a>
-              <button type="button" onClick={onClose} className="text-[12px] text-white/50 hover:text-white">
-                Close
-              </button>
+              {!landing && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-[12px] text-white/50 hover:text-white"
+                >
+                  Close
+                </button>
+              )}
             </div>
 
-            <h1 className="text-[24px] font-semibold tracking-tight">
-              {otpSent
-                ? "Check your inbox"
-                : mode === "join"
-                  ? joinStep === "email" ? "Join Wippo" : "Choose your handle"
-                  : mode === "link"
-                    ? "Add sign-in email"
-                    : "Welcome back"}
-            </h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-white/50">
-              {otpSent
-                ? `Enter the one-time code sent to ${email}.`
-                : reason
-                  ? `${reason.charAt(0).toUpperCase()}${reason.slice(1)}. Sign in or create an account to continue.`
-                  : mode === "join"
-                    ? joinStep === "email"
-                      ? "Enter your email to create your account."
-                      : `We'll send a verification code to ${email}.`
-                    : mode === "link"
-                      ? "Verify an email address to make this account recoverable after sign-out."
-                      : "We’ll email you a one-time sign-in code."}
-            </p>
+            <h1 className="text-[24px] font-semibold tracking-tight">{title}</h1>
+            <p className="mt-2 text-[13px] leading-relaxed text-white/50">{subtitle}</p>
 
-            <form onSubmit={(event) => void submit(event)} className="mt-7 space-y-4">
-              {!otpSent && mode === "join" && joinStep === "handle" && (
+            <form onSubmit={(e) => void submit(e)} className="mt-7 space-y-4">
+              {step === "email" && (
+                <label className="block text-[11px] font-medium text-white/65">
+                  Email address
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    placeholder="you@email.com"
+                    required
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-3 text-[13px] text-white outline-none placeholder:text-white/30"
+                  />
+                </label>
+              )}
+
+              {step === "otp" && (
+                <label className="block text-[11px] font-medium text-white/65">
+                  One-time code
+                  <input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    placeholder="000000"
+                    required
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-3 text-[13px] tracking-[0.2em] text-white outline-none placeholder:text-white/30"
+                  />
+                </label>
+              )}
+
+              {step === "profile" && (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
-                    {([
-                      ["creator", "I'm building"],
-                      ["client", "I own a project"],
-                    ] as const).map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setTrack(value)}
-                        aria-pressed={track === value}
-                        className={`rounded-xl border px-3 py-3 text-[11px] font-medium ${track === value ? "border-emerald-400/60 bg-emerald-400/10 text-white" : "border-white/10 text-white/55"}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
                   <label className="block text-[11px] font-medium text-white/65">
                     Username
                     <div className="mt-1.5 flex items-center rounded-xl border border-white/15 bg-white/[0.04] px-3">
                       <span className="text-white/40">@</span>
                       <input
                         value={name}
-                        onChange={(event) => setName(event.target.value.replace(/\s/g, "").slice(0, 24))}
+                        onChange={(e) =>
+                          setName(e.target.value.replace(/\s/g, "").replace(/^@/, "").slice(0, 24))
+                        }
                         autoComplete="username"
                         maxLength={24}
                         placeholder="yourname"
@@ -176,82 +283,48 @@ export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
                       />
                     </div>
                   </label>
+                  <label className="block text-[11px] font-medium text-white/65">
+                    Studio code <span className="text-white/35">(optional)</span>
+                    <input
+                      value={studioCode}
+                      onChange={(e) => setStudioCode(e.target.value)}
+                      autoComplete="off"
+                      placeholder="Enter if you have one"
+                      className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-3 text-[13px] text-white outline-none placeholder:text-white/30"
+                    />
+                  </label>
                 </>
               )}
 
-              {!otpSent && (
-                <label className="block text-[11px] font-medium text-white/65">
-                  Email address
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    autoComplete="email"
-                    disabled={otpSent || (mode === "join" && joinStep === "handle")}
-                    placeholder="builder@domain.com"
-                    required
-                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-3 text-[13px] text-white outline-none placeholder:text-white/30 disabled:opacity-70"
-                  />
-                </label>
+              {err && (
+                <p role="alert" className="text-[12px] text-red-300">
+                  {err}
+                </p>
               )}
-
-              {otpSent && (
-                <label className="block text-[11px] font-medium text-white/65">
-                  One-time code
-                  <input
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={token}
-                    onChange={(event) => setToken(event.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="000000"
-                    required
-                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-3 text-center font-mono text-xl tracking-[0.35em] text-white outline-none"
-                  />
-                </label>
-              )}
-
-              {err && <p role="alert" className="text-[12px] text-red-300">{err}</p>}
 
               <button
                 type="submit"
-                disabled={busy || (otpSent && token.trim().length < 6) || (!otpSent && mode === "join" && joinStep === "handle" && name.trim().length < 2)}
-                className="w-full rounded-xl bg-white py-3.5 text-[12px] font-bold uppercase tracking-wide text-black disabled:opacity-40"
+                disabled={busy}
+                className="w-full rounded-xl bg-white py-3 text-[13px] font-semibold text-black disabled:opacity-50"
               >
                 {busy
                   ? "Please wait…"
-                  : otpSent
-                    ? "Verify and continue"
-                    : mode === "join"
-                      ? joinStep === "email" ? "Continue with email" : "Email me a code"
-                      : "Email me a code"}
+                  : step === "email"
+                    ? "Continue"
+                    : step === "otp"
+                      ? "Verify"
+                      : "Enter Wippo"}
               </button>
             </form>
 
-            {!otpSent && mode !== "link" && (
+            {step === "otp" && (
               <button
                 type="button"
                 onClick={() => {
-                  setMode(mode === "join" ? "signin" : "join");
-                  setJoinStep("email");
-                  setErr("");
-                }}
-                className="mt-4 w-full text-[12px] text-white/55 hover:text-white"
-              >
-                {mode === "join" ? "Already have an account? Sign in" : "New to Wippo? Create an account"}
-              </button>
-            )}
-            {!otpSent && mode === "join" && joinStep === "handle" && (
-              <button type="button" onClick={() => setJoinStep("email")} className="mt-3 w-full text-[12px] text-white/40 hover:text-white/70">
-                Back
-              </button>
-            )}
-            {otpSent && (
-              <button
-                type="button"
-                onClick={() => {
+                  setStep("email");
                   setOtpSent(false);
                   setToken("");
-                  if (mode === "join") setJoinStep("email");
+                  setErr("");
                 }}
                 className="mt-4 w-full text-[12px] text-white/45 hover:text-white/75"
               >
@@ -259,19 +332,53 @@ export default function AuthModal({ open, reason, onClose, onSuccess }: Props) {
               </button>
             )}
 
-            <div className="my-5 flex items-center gap-3 text-[10px] uppercase tracking-widest text-white/35">
-              <span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" />
-            </div>
-            <button
-              type="button"
-              onClick={continueAsGuest}
-              className="w-full rounded-xl border border-white/15 py-3 text-[12px] font-semibold text-white/80 hover:bg-white/[0.05]"
-            >
-              Continue as guest · explore first
-            </button>
-            <p className="mt-3 text-center text-[10px] text-white/35">
-              Browsing is open. You can create an account whenever an action needs it.
-            </p>
+            {step === "email" && (
+              <div className="mt-6 flex items-center justify-center gap-3 text-[12px] text-white/45">
+                {mode === "join" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signin");
+                      setErr("");
+                    }}
+                    className="hover:text-white"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("join");
+                      setErr("");
+                    }}
+                    className="hover:text-white"
+                  >
+                    New here? Create an account
+                  </button>
+                )}
+              </div>
+            )}
+
+            {step === "email" && (
+              <>
+                <div className="my-5 flex items-center gap-3 text-[10px] uppercase tracking-widest text-white/35">
+                  <span className="h-px flex-1 bg-white/10" />
+                  or
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
+                <button
+                  type="button"
+                  onClick={continueAsGuest}
+                  className="w-full rounded-xl border border-white/15 py-3 text-[12px] font-semibold text-white/80 hover:bg-white/[0.05]"
+                >
+                  Continue as guest
+                </button>
+                <p className="mt-3 text-center text-[10px] text-white/35">
+                  Browse freely. Create an account when you need to.
+                </p>
+              </>
+            )}
           </div>
         </section>
 
