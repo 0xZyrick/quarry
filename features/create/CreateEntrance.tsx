@@ -245,11 +245,15 @@ export default function CreateEntrance({
           <button type="button" onClick={onClose} className="absolute right-5 top-5 text-[12px] text-white/50 hover:text-white">
             Cancel
           </button>
-          <div className="border-y border-dashed border-white/25 py-3 text-center">
-            <h2 className="text-[12px] font-bold uppercase tracking-[0.16em] text-white">Creator invite code</h2>
+          <div className="border-y border-white/15 py-3 text-center">
+            <h2 className="text-[12px] font-bold uppercase tracking-[0.16em] text-white">
+              {signedIn ? "Creator invite code" : "Studio is locked"}
+            </h2>
           </div>
           <p className="mt-4 text-[13px] leading-relaxed text-white/55">
-            You can browse Studio freely. Enter a creator code to publish projects, updates, and live sessions.
+            {signedIn
+              ? "Enter your creator invite code to publish projects, updates, and live sessions."
+              : "Sign in or create an account, then unlock Studio with a creator invite code."}
           </p>
           {signedIn ? (
             <form onSubmit={unlockStudio} className="mt-5 space-y-3">
@@ -331,6 +335,7 @@ export default function CreateEntrance({
                 + New project
               </button>
             )}
+
 
             <label className="block text-[11px] font-medium text-[var(--text-muted)]">
               Update title

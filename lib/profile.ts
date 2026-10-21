@@ -6,6 +6,7 @@
 // IMPORTANT: this runs in the browser, so it only shapes the UI. The server (Liveblocks auth, LiveKit token)
 // must recompute the role from the session with `roleIn()` and enforce it itself.
 import {NODES} from "./map";
+import {isDemoMode,DEMO_UID,DEMO_HANDLE} from "./demoMode";
 import {Onboarding,isComplete,onboardingAdapter} from "./onboarding";
 export type Role="client"|"creator"|"guest";
 export type Profile={id:string;handle:string;creatorNodeId:string|null;clientRoomIds:string[];crewRoomIds:string[];gender?:"male"|"female"|null;studioUnlocked?:boolean};
@@ -42,6 +43,9 @@ const signIn=async(body:object):Promise<Profile|null>=>{
   if(r.status===401)throw new SessionLost("invite session lost");
   if(!r.ok)throw new Error("session "+r.status);const j=await r.json();return j.profile?{creatorNodeId:null,clientRoomIds:[],crewRoomIds:[],...j.profile}:null};
 export const profileAdapter:ProfileAdapter={async get(){
+  if(isDemoMode()){
+    return{id:DEMO_UID,handle:DEMO_HANDLE,creatorNodeId:"demo-proj-wippo-shell",clientRoomIds:[],crewRoomIds:[],studioUnlocked:true};
+  }
   const as=new URLSearchParams(location.search).get("as");
   if(as&&process.env.NODE_ENV!=="production"){try{return await signIn({dev:as})}catch{return MOCK[as]??null}}
   const o=onboardingAdapter.read();if(!isComplete(o))return null;

@@ -7,6 +7,8 @@ import { isInCircle, currentUid } from "@/lib/circle";
 import { useShellUi } from "@/lib/shellUi";
 import { navigateToRoute } from "@/lib/appRoutes";
 import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
+import { isDemoMode } from "@/lib/demoMode";
+import { demoJourneyProject, isDemoProjectId } from "@/lib/demoData";
 
 type MediaDrop = { id?: string; videoUrl?: string | null; imageUrl?: string | null; nextSnapshotUrl?: string | null; prevSnapshotUrl?: string | null };
 type Tried = { kind: string; text: string };
@@ -248,6 +250,15 @@ export default function ProjectJourneyPage({
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError("");
+    if (isDemoMode() || isDemoProjectId(projectId)) {
+      const p = demoJourneyProject(projectId) as any;
+      setProject(p);
+      setFollowerCount(p._count?.followers ?? 120);
+      const nodes = p.journeyNodes || [];
+      setSelectedId(nodes[nodes.length - 1]?.id || null);
+      setLoading(false);
+      return;
+    }
     try {
       const r = await fetch(`/api/projects/${encodeURIComponent(projectId)}`);
       if (!r.ok) throw new Error(r.status === 404 ? "This project could not be found." : "Could not load this project.");
@@ -262,8 +273,18 @@ export default function ProjectJourneyPage({
         throw new Error("This project has no journey data yet.");
       }
     } catch (error) {
-      setProject(null);
-      setLoadError(error instanceof Error ? error.message : "Could not load this project.");
+      // Soft fallback so demo cards still open a full journey
+      if (isDemoProjectId(projectId) || projectId.startsWith("mock-")) {
+        const p = demoJourneyProject(projectId) as any;
+        setProject(p);
+        setFollowerCount(p._count?.followers ?? 120);
+        const nodes = p.journeyNodes || [];
+        setSelectedId(nodes[nodes.length - 1]?.id || null);
+        setLoadError("");
+      } else {
+        setProject(null);
+        setLoadError(error instanceof Error ? error.message : "Could not load this project.");
+      }
     } finally {
       setLoading(false);
     }
@@ -455,7 +476,7 @@ export default function ProjectJourneyPage({
         </button>
 
         {/* Wireframe header */}
-        <header className="mb-6 rounded-xl border border-dashed border-white/25 px-4 py-3">
+        <header className="mb-6 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 text-[13px] sm:text-[14px] text-white tracking-wide">
               <span className="font-semibold uppercase">{project.title}</span>
@@ -476,7 +497,7 @@ export default function ProjectJourneyPage({
               type="button"
               onClick={() => void toggleProjectFollow()}
               disabled={followBusy}
-              className="shrink-0 rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50 hover:text-white"
+              className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50 hover:text-white"
             >
               {inCircle ? "Following" : "+ Follow Journey"}
             </button>
@@ -509,14 +530,14 @@ export default function ProjectJourneyPage({
             return (
               <section
                 key={n.id}
-                className={`rounded-xl border border-dashed ${
+                className={`rounded-xl border ${
                   active ? "border-white/40 bg-white/[0.03]" : "border-white/20"
                 } overflow-hidden`}
               >
                 <button
                   type="button"
                   onClick={() => setSelectedId(n.id)}
-                  className="w-full px-4 py-2.5 text-left text-[12px] sm:text-[13px] text-white/90 border-b border-dashed border-white/15 hover:bg-white/[0.02]"
+                  className="w-full px-4 py-2.5 text-left text-[12px] sm:text-[13px] text-white/90 border-b border-white/10 hover:bg-white/[0.02]"
                 >
                   <span className="text-white/50">[ LOG #{String(n.position).padStart(3, "0")} ]</span>
                   <span className="text-white/40"> — </span>
@@ -527,7 +548,7 @@ export default function ProjectJourneyPage({
 
                 <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-0">
                   {/* 15s autoplaying canvas / video reel */}
-                  <div className="relative aspect-video bg-[#0a0b0d] border-b md:border-b-0 md:border-r border-dashed border-white/15">
+                  <div className="relative aspect-video bg-[#0a0b0d] border-b md:border-b-0 md:border-r border-white/10">
                     {media ? (
                       isVideo ? (
                         <video
@@ -599,7 +620,7 @@ export default function ProjectJourneyPage({
 
         {/* Owner help request — keep capability, quieter chrome */}
         {isOwner && (
-          <div className="mt-8 rounded-xl border border-dashed border-white/20 p-4 space-y-3">
+          <div className="mt-8 rounded-xl border border-white/10 p-4 space-y-3">
             <p className="text-[11px] uppercase tracking-wider text-white/45">Ask for a hand</p>
             <input
               value={helpTitle}
@@ -619,7 +640,7 @@ export default function ProjectJourneyPage({
               type="button"
               disabled={helpBusy || helpTitle.trim().length < 3}
               onClick={() => void postHelpRequest()}
-              className="rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 disabled:opacity-40"
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 disabled:opacity-40"
             >
               {helpBusy ? "Posting…" : "Post help request"}
             </button>

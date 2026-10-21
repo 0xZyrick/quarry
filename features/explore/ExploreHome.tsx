@@ -5,6 +5,8 @@ import { useShellUi } from "@/lib/shellUi";
 import { navigateToRoute } from "@/lib/appRoutes";
 import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
 import { currentUid } from "@/lib/circle";
+import { isDemoMode } from "@/lib/demoMode";
+import { DEMO_FEED } from "@/lib/demoData";
 
 type RoomStatus = "live" | "needs_hand" | "offline";
 
@@ -152,6 +154,9 @@ export default function ExploreHome() {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [claimingHelpId, setClaimingHelpId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  /** Avoid hydration mismatch: localStorage demo flag only exists on the client */
+  const [ready, setReady] = useState(false);
+  const [demo, setDemo] = useState(false);
 
   const getSafeMediaUrl = useCallback((value: unknown): string | null => {
     if (typeof value !== "string") return null;
@@ -163,6 +168,27 @@ export default function ExploreHome() {
 
   const load = useCallback(async () => {
     setLoadError("");
+    if (demo) {
+      setCards(
+        DEMO_FEED.map((c) => ({
+          id: c.id,
+          title: c.title,
+          projectTitle: c.projectTitle,
+          stack: c.stack,
+          phaseLabel: c.phaseLabel,
+          target: c.target,
+          status: c.status,
+          people: c.people,
+          duration: c.duration,
+          creatorHandle: c.creatorHandle,
+          imageUrl: c.imageUrl,
+          mediaUrl: c.mediaUrl,
+          hasVideo: true,
+          helpId: c.helpId,
+        }))
+      );
+      return;
+    }
     try {
       const [helpResponse, sessionResponse, projectsResponse] = await Promise.all([
         fetch("/api/help?status=OPEN&take=40").catch(() => null),
@@ -226,15 +252,65 @@ export default function ExploreHome() {
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not load projects.");
     }
-  }, [getSafeMediaUrl]);
+  }, [demo, getSafeMediaUrl]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    const on = isDemoMode();
+    setDemo(on);
+    setReady(true);
+    // Fill immediately so we never flash an empty demo grid
+    if (on) {
+      setCards(
+        DEMO_FEED.map((c) => ({
+          id: c.id,
+          title: c.title,
+          projectTitle: c.projectTitle,
+          stack: c.stack,
+          phaseLabel: c.phaseLabel,
+          target: c.target,
+          status: c.status,
+          people: c.people,
+          duration: c.duration,
+          creatorHandle: c.creatorHandle,
+          imageUrl: c.imageUrl,
+          mediaUrl: c.mediaUrl,
+          hasVideo: true as const,
+          helpId: c.helpId,
+        }))
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    void load();
+  }, [ready, demo, load]);
 
   const filtered = useMemo(() => {
-    // Stock mocks fill the grid until there are more than 8 real feeds
-    const source = cards.length > 8 ? cards : [...cards, ...STOCK_MOCKS];
+    // Until mounted, keep empty so server HTML matches first client paint (no stock/demo leak).
+    if (!ready) return [];
+    const sampleCards = DEMO_FEED.map((c) => ({
+      id: c.id,
+      title: c.title,
+      projectTitle: c.projectTitle,
+      stack: c.stack,
+      phaseLabel: c.phaseLabel,
+      target: c.target,
+      status: c.status,
+      people: c.people,
+      duration: c.duration,
+      creatorHandle: c.creatorHandle,
+      imageUrl: c.imageUrl,
+      mediaUrl: c.mediaUrl,
+      hasVideo: true as boolean,
+      helpId: c.helpId,
+    }));
+    // Guest: sample world. Signed-in: real feed, pad with samples until more than 8 reels.
+    const source = demo
+      ? (cards.length ? cards : sampleCards)
+      : cards.length > 8
+        ? cards
+        : [...cards, ...sampleCards];
     return source.filter((c) => {
       if (status !== "all" && c.status !== status) return false;
       const needle = query.trim().toLowerCase();
@@ -243,7 +319,7 @@ export default function ExploreHome() {
         (value) => value && value.toLowerCase().includes(needle)
       );
     });
-  }, [cards, status, query]);
+  }, [cards, status, query, ready, demo]);
 
   const walkIn = (id: string) => navigateToRoute({ kind: "room", id });
 
@@ -299,8 +375,8 @@ export default function ExploreHome() {
                 {option.label}
               </button>
             ))}
-            <span className="ml-auto shrink-0 text-[11px] tabular-nums text-white/30">
-              {filtered.length}
+            <span className="ml-auto shrink-0 text-[11px] tabular-nums text-white/30" suppressHydrationWarning>
+              {ready ? filtered.length : "—"}
             </span>
           </div>
         </div>
@@ -334,7 +410,7 @@ export default function ExploreHome() {
           )}
 
           {/* Video-first masonry-ish grid */}
-          <div className="columns-1 sm:columns-2 xl:columns-3 gap-3 space-y-3">
+          <div className="columns-1 sm:columns-2 gap-3 space-y-3">
             {filtered.map((c) => {
               const isHover = hoverId === c.id;
               const isLive = c.status === "live";
@@ -383,13 +459,26 @@ export default function ExploreHome() {
                           />
                         ) : null}
                         <video
+                          key={c.mediaUrl || c.id}
                           src={c.mediaUrl || undefined}
                           poster={c.imageUrl || undefined}
                           muted
                           playsInline
-                          preload="metadata"
+                          loop
+                          autoPlay
+                          preload="auto"
+                          controls={false}
+                          ref={(el) => {
+                            if (!el) return;
+                            el.muted = true;
+                            const tryPlay = () => void el.play().catch(() => {});
+                            if (el.readyState >= 2) tryPlay();
+                            else el.addEventListener("loadeddata", tryPlay, { once: true });
+                          }}
                           onTimeUpdate={(event) => {
-                            if (event.currentTarget.currentTime >= 15) event.currentTarget.pause();
+                            if (event.currentTarget.currentTime >= 20) {
+                              event.currentTarget.currentTime = 0;
+                            }
                           }}
                           className={`absolute inset-0 h-full w-full object-cover transition duration-700 ${
                             isHover ? "scale-[1.05] opacity-100" : "scale-100 opacity-95"
@@ -435,7 +524,7 @@ export default function ExploreHome() {
                             Log reel
                           </span>
                         )}
-                        {c.id.startsWith("mock-") && (
+                        {(c.id.startsWith("mock-") || c.id.startsWith("demo-")) && (
                           <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/50 ring-1 ring-white/10 backdrop-blur-md">
                             Sample
                           </span>

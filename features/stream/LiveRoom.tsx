@@ -13,6 +13,8 @@ import { useShellUi } from "@/lib/shellUi";
 import { parseStreamUrl } from "@/lib/streamEmbed";
 import { useOnboarding } from "@/features/onboarding/OnboardingProvider";
 import SocialExportCard, { type ExportCardData } from "@/features/project/SocialExportCard";
+import { isDemoMode } from "@/lib/demoMode";
+import { demoJourneyProject, isDemoProjectId, DEMO_FEED } from "@/lib/demoData";
 
 type RailTab = "chat" | "work" | "about";
 
@@ -108,6 +110,7 @@ export default function LiveRoom() {
   const [helpBody, setHelpBody] = useState("");
   const [helpBusy, setHelpBusy] = useState(false);
   const [claimingHelpId, setClaimingHelpId] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState("");
 
   const hostName =
     project?.creator?.handle || meta?.handle || node?.name || "host";
@@ -154,9 +157,23 @@ export default function LiveRoom() {
   }, [project]);
   const replayMediaUrl = useMemo(() => {
     const nodes = project?.journeyNodes || [];
-    const withVideo = [...nodes].reverse().find((n) => n.mediaDrops?.some((drop) => drop.videoUrl));
-    return withVideo?.mediaDrops?.find((drop) => drop.videoUrl)?.videoUrl || null;
-  }, [project]);
+    for (const n of [...nodes].reverse()) {
+      const fromDrop = n.mediaDrops?.find((drop) => drop.videoUrl)?.videoUrl;
+      if (fromDrop) return fromDrop;
+      const anyNode = n as { mediaUrl?: string | null };
+      if (anyNode.mediaUrl && /\.(mp4|webm|mov)(\?|$)/i.test(anyNode.mediaUrl)) return anyNode.mediaUrl;
+    }
+    // Demo feed fallback by room id
+    if (isDemoMode() || isDemoProjectId(roomId)) {
+      const card = DEMO_FEED.find((c) => c.id === roomId);
+      if (card?.mediaUrl) return card.mediaUrl;
+    }
+    return null;
+  }, [project, roomId]);
+
+  useEffect(() => {
+    setVideoError("");
+  }, [replayMediaUrl]);
 
   const [peerCount, setPeerCount] = useState(0);
   const [presenceError, setPresenceError] = useState("");
@@ -265,6 +282,15 @@ export default function LiveRoom() {
     if (!id) return;
     setProjectLoading(true);
     setProjectError("");
+
+    if (isDemoMode() || isDemoProjectId(id)) {
+      const p = demoJourneyProject(id) as unknown as ProjectPayload;
+      setProject(p);
+      setProjectError("");
+      setProjectLoading(false);
+      return;
+    }
+
     fetch(`/api/projects/${encodeURIComponent(id)}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 404 ? "This project is no longer available." : "Could not load this project.");
@@ -279,8 +305,14 @@ export default function LiveRoom() {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setProject(null);
-          setProjectError(error instanceof Error ? error.message : "Could not load this project.");
+          // Last resort: if id looks demo-ish, still show mock room
+          if (isDemoProjectId(id) || id.startsWith("mock-")) {
+            setProject(demoJourneyProject(id) as unknown as ProjectPayload);
+            setProjectError("");
+          } else {
+            setProject(null);
+            setProjectError(error instanceof Error ? error.message : "Could not load this project.");
+          }
         }
       })
       .finally(() => {
@@ -303,12 +335,15 @@ export default function LiveRoom() {
         if (!cancelled) {
           setActiveSession(session?.id ? session as ActiveSession : null);
         }
-      } catch (error) {
-        if (!cancelled) {
-          setProjectError(error instanceof Error ? error.message : "Could not load the live session.");
-        }
+      } catch {
+        // Session poll is optional — don't overwrite project stage errors (esp. demo rooms)
+        if (!cancelled) setActiveSession(null);
       }
     };
+    if (isDemoMode() || isDemoProjectId(roomId)) {
+      setActiveSession(null);
+      return;
+    }
     void loadActiveSession();
     const timer = window.setInterval(loadActiveSession, 10_000);
     return () => {
@@ -679,12 +714,45 @@ export default function LiveRoom() {
                   allowFullScreen
                 />
               ) : replayMediaUrl ? (
-                <video
-                  src={replayMediaUrl}
-                  controls
-                  playsInline
-                  className="absolute inset-0 h-full w-full object-contain"
-                />
+                <div className="absolute inset-0 bg-black">
+                  <video
+                    key={replayMediaUrl}
+                    src={replayMediaUrl}
+                    controls
+                    playsInline
+                    autoPlay
+                    muted
+                    loop
+                    preload="auto"
+                    className="absolute inset-0 h-full w-full object-contain"
+                    ref={(el) => {
+                      if (!el) return;
+                      el.muted = true;
+                      const play = () => {
+                        void el.play().catch(() => {
+                          /* autoplay blocked — controls still work */
+                        });
+                      };
+                      if (el.readyState >= 2) play();
+                      else {
+                        el.addEventListener("canplay", play, { once: true });
+                        el.addEventListener("loadeddata", play, { once: true });
+                      }
+                    }}
+                    onError={() => {
+                      setVideoError("This demo clip could not load. Check your network or try another room.");
+                    }}
+                    onLoadedMetadata={(e) => {
+                      setVideoError("");
+                      void e.currentTarget.play().catch(() => {});
+                    }}
+                  />
+                  {videoError ? (
+                    <p role="alert" className="absolute inset-x-0 bottom-10 z-10 text-center text-[12px] text-red-300">
+                      {videoError}
+                    </p>
+                  ) : null}
+                </div>
               ) : previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={previewUrl} alt={`Latest work on ${title}`} className="absolute inset-0 h-full w-full object-cover" />

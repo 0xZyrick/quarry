@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { useShellUi } from "@/lib/shellUi";
 import { useOnboarding } from "../onboarding/OnboardingProvider";
 import { currentUid } from "@/lib/circle";
+import { isDemoMode, DEMO_HANDLE } from "@/lib/demoMode";
+import { demoProfileView } from "@/lib/demoData";
 import { toggleUserFollow } from "@/lib/userFollow";
 import Avatar from "../shared/Avatar";
 
@@ -154,13 +156,27 @@ export default function CreatorProfile({
     setLoading(true);
     const uid = currentUid();
     const q = handle === "me" && uid ? `?userId=${encodeURIComponent(uid)}` : `?handle=${encodeURIComponent(handle)}`;
+    if (isDemoMode()) {
+      const h =
+        handle === "me" || handle === DEMO_HANDLE || handle === "demo.builder"
+          ? DEMO_HANDLE
+          : handle.replace(/^@/, "") || DEMO_HANDLE;
+      setProfile(demoProfileView(h, !!isSelf || h === DEMO_HANDLE) as any);
+      setLoading(false);
+      return;
+    }
+
     fetch(`/api/profile${q}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
         const p = d.profile || d;
         if (!p?.handle && !p?.id) {
-          // No row yet — empty self profile, not demo fiction
+          if (isDemoMode()) {
+            setProfile(demoProfileView(handle, !!isSelf) as any);
+            return;
+          }
+          // No row yet — empty self profile
           const h = handle.replace(/^@/, "") || "you";
           setProfile({
             handle: h,
@@ -289,7 +305,7 @@ export default function CreatorProfile({
 
   // Guest cannot open profiles
   const signedUid = currentUid();
-  if (!signedUid && !profile.isSelf) {
+  if (!isDemoMode() && !signedUid && !profile.isSelf) {
     return (
       <div className="absolute inset-0 bg-[var(--page)] z-50 flex flex-col items-center justify-center gap-4 px-6">
         <p className="text-[15px] text-[var(--text)] text-center">Sign in to view profiles.</p>
@@ -325,7 +341,7 @@ export default function CreatorProfile({
 
       <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6 pb-24 font-mono">
         {/* Wireframe identity block */}
-        <header className="rounded-xl border border-dashed border-white/25 p-4 sm:p-5">
+        <header className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <div className="relative shrink-0">
@@ -338,50 +354,30 @@ export default function CreatorProfile({
                       accept="image/*"
                       className="hidden"
                       onChange={async (e) => {
-                        const input = e.target;
-                        const file = input.files?.[0];
+                        const file = e.target.files?.[0];
                         if (!file) return;
                         const uid = currentUid();
-                        if (!uid) {
-                          setProfileError("Sign in again to update your photo.");
-                          return;
-                        }
-                        if (!file.type.startsWith("image/")) {
-                          setProfileError("Choose an image file.");
-                          return;
-                        }
-                        if (file.size > 8 * 1024 * 1024) {
-                          setProfileError("Image is too large (max 8MB).");
-                          return;
-                        }
-                        setProfileError("");
+                        if (!uid) return;
                         try {
-                          const fd = new FormData();
-                          fd.append("file", file);
-                          const up = await fetch("/api/upload", { method: "POST", body: fd });
-                          const upJson = await up.json().catch(() => ({}));
-                          if (!up.ok) {
-                            throw new Error(upJson.error || "Could not upload photo.");
-                          }
-                          const url = upJson.url as string;
-                          if (!url) throw new Error("Upload returned no URL.");
-
-                          const response = await fetch("/api/profile", {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ userId: uid, avatarUrl: url }),
-                          });
-                          const result = await response.json().catch(() => ({}));
-                          if (!response.ok) {
-                            throw new Error(result.error || "Could not save photo.");
-                          }
-                          setProfile((p) => (p ? { ...p, avatarUrl: url } : p));
+                          const reader = new FileReader();
+                          reader.onload = async () => {
+                            const dataUrl = String(reader.result || "");
+                            if (dataUrl.length > 500_000) {
+                              setProfileError("Image is too large. Try a smaller photo.");
+                              return;
+                            }
+                            const response = await fetch("/api/profile", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ userId: uid, avatarUrl: dataUrl }),
+                            });
+                            const result = await response.json().catch(() => ({}));
+                            if (!response.ok) throw new Error(result.error || "Could not update photo.");
+                            setProfile((p) => (p ? { ...p, avatarUrl: dataUrl } : p));
+                          };
+                          reader.readAsDataURL(file);
                         } catch (error) {
-                          setProfileError(
-                            error instanceof Error ? error.message : "Could not update photo."
-                          );
-                        } finally {
-                          input.value = "";
+                          setProfileError(error instanceof Error ? error.message : "Could not update photo.");
                         }
                       }}
                     />
@@ -424,7 +420,7 @@ export default function CreatorProfile({
                   setProfileError("");
                   setEditingProfile((open) => !open);
                 }}
-                className="shrink-0 rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50"
+                className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80 hover:border-white/50"
               >
                 {editingProfile ? "Cancel" : "Edit Profile"}
               </button>
@@ -441,7 +437,7 @@ export default function CreatorProfile({
                     useShellUi.getState().openInbox();
                     window.dispatchEvent(new CustomEvent("wippo:message", { detail: { handle: profile.handle } }));
                   }}
-                  className="rounded-lg border border-dashed border-white/25 px-3 py-1.5 text-[11px] text-white/70 hover:text-white"
+                  className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-white/70 hover:text-white"
                 >
                   Message
                 </button>
@@ -458,7 +454,7 @@ export default function CreatorProfile({
                       setFollowing((f) => !f);
                     } catch {}
                   }}
-                  className="rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80"
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white/80"
                 >
                   {following ? "Following" : "Follow"}
                 </button>
@@ -468,7 +464,7 @@ export default function CreatorProfile({
 
           {profile.isSelf && editingProfile && (
             <form
-              className="mt-4 space-y-3 border-t border-dashed border-white/15 pt-4"
+              className="mt-4 space-y-3 border-t border-white/10 pt-4"
               onSubmit={async (event) => {
                 event.preventDefault();
                 const uid = currentUid();
@@ -527,7 +523,7 @@ export default function CreatorProfile({
               <button
                 type="submit"
                 disabled={savingProfile || !editDisplayName.trim()}
-                className="rounded-lg border border-dashed border-white/30 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white disabled:opacity-40"
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-[11px] uppercase tracking-wider text-white disabled:opacity-40"
               >
                 {savingProfile ? "Saving…" : "Save profile"}
               </button>
@@ -541,7 +537,7 @@ export default function CreatorProfile({
             Active project journeys
           </h2>
           {profile.journeys.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/15 px-4 py-8 text-center text-[12px] text-white/35">
+            <p className="rounded-xl border border-white/10 px-4 py-8 text-center text-[12px] text-white/35">
               No active journeys yet.
             </p>
           ) : (
@@ -551,7 +547,7 @@ export default function CreatorProfile({
                   key={j.id}
                   type="button"
                   onClick={() => useShellUi.getState().openProject(j.id)}
-                  className="rounded-xl border border-dashed border-white/20 overflow-hidden text-left hover:border-white/40 transition-colors"
+                  className="rounded-2xl border border-white/10 bg-[#111318] overflow-hidden text-left hover:border-white/25 hover:bg-white/[0.03] transition-colors"
                 >
                   <div className="relative aspect-video bg-[#0a0b0d]">
                     {j.cover ? (
@@ -563,7 +559,7 @@ export default function CreatorProfile({
                       </div>
                     )}
                   </div>
-                  <div className="px-3 py-2.5 border-t border-dashed border-white/15">
+                  <div className="px-3 py-2.5 border-t border-white/10">
                     <p className="text-[13px] font-medium text-white">
                       {j.title}
                       {j.phase ? <span className="text-white/40"> ({j.phase})</span> : null}
@@ -583,7 +579,7 @@ export default function CreatorProfile({
           <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">
             Verified proof of work &amp; help highlights
           </h2>
-          <div className="rounded-xl border border-dashed border-white/20 px-4 py-3">
+          <div className="rounded-xl border border-white/10 px-4 py-3">
             {profile.helped.length === 0 ? (
               <p className="text-[12px] text-white/35">No help highlights yet.</p>
             ) : (

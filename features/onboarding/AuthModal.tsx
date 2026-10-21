@@ -180,6 +180,7 @@ export default function AuthModal({ open, reason, onClose, onSuccess, landing }:
   };
 
   const continueAsGuest = () => {
+    // Guest = explore sample world (feed, profile, studio). Not a signed-in account.
     update({ explored: true, auth: "guest", name: "", uid: "", track: "guest" });
     onSuccess?.();
     onClose();
@@ -375,7 +376,7 @@ export default function AuthModal({ open, reason, onClose, onSuccess, landing }:
                   Continue as guest
                 </button>
                 <p className="mt-3 text-center text-[10px] text-white/35">
-                  Browse freely. Create an account when you need to.
+                  Explore sample rooms, journeys, and studio. Sign in when you want your own.
                 </p>
               </>
             )}
